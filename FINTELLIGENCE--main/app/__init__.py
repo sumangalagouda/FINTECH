@@ -49,11 +49,19 @@ def create_app(config_name='default'):
     from app.routes.governance import governance_bp
     from app.routes.evidence import evidence_bp
     from app.reports.report_generator import reports_bp
-    
+
+    # New additive route blueprints
+    from app.routes.dashboard import dashboard_bp
+    from app.routes.escalation import escalation_bp
+
     app.register_blueprint(intelligence_bp)
     app.register_blueprint(suspicion_bp)
     app.register_blueprint(governance_bp)
     app.register_blueprint(evidence_bp)
     app.register_blueprint(reports_bp)
-    
+
+    app.register_blueprint(dashboard_bp)
+    app.register_blueprint(escalation_bp)
+
     return app
+

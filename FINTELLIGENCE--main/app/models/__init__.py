@@ -10,3 +10,6 @@ from .supervisor_approval import SupervisorApproval
 from .case_graph import CaseGraph
 from .investigator_note import InvestigatorNote
 from .evidence_item import EvidenceItem
+from .registration_request import RegistrationRequest
+from .case_escalation import CaseEscalation
+
