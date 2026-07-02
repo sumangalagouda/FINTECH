@@ -1,4 +1,4 @@
-# FINTELLIGENCE 🕵️‍♂️📈
+# ArthaDrishti 🕵️‍♂️📈
 
 An advanced, AI-powered Anti-Money Laundering (AML) Case Management System designed to streamline financial crime investigations, detect suspicious activities, and automate comprehensive reporting.
 
