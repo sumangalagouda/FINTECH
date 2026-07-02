@@ -122,8 +122,20 @@ def run_silent_analysis(statement_id, case_id):
             
     try:
         update_case_suspicion_score(case_id, results)
+        
+        # Fire AI Summary Generation asynchronously
+        import threading
+        from app.routes.cases import generate_ai_summary_for_case
+        from flask import current_app
+        
+        app = current_app._get_current_object()
+        def bg_generate():
+            with app.app_context():
+                generate_ai_summary_for_case(case_id, force=True)
+                
+        threading.Thread(target=bg_generate, daemon=True).start()
     except Exception as e:
-        print(f"Error updating score: {e}")
+        print(f"Error updating score or triggering AI summary: {e}")
         
     return results
 

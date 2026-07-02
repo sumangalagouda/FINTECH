@@ -12,4 +12,6 @@ from .investigator_note import InvestigatorNote
 from .evidence_item import EvidenceItem
 from .registration_request import RegistrationRequest
 from .case_escalation import CaseEscalation
+from .digital_signature import DigitalSignature
+from .sio_action import SIOAction
 

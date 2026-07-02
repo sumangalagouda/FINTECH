@@ -1,55 +1,66 @@
-# FINTELLIGENCE Backend
+# FINTELLIGENCE 🕵️‍♂️📈
 
-This is the foundational backend for FINTELLIGENCE, an AI-powered forensic bank statement analysis platform.
+An advanced, AI-powered Anti-Money Laundering (AML) Case Management System designed to streamline financial crime investigations, detect suspicious activities, and automate comprehensive reporting.
 
-## Setup Instructions
+## 🌟 Key Features
 
-### 1. PostgreSQL (Neon Database)
-We use a shared Neon PostgreSQL database. 
-You must replace the placeholder in `.env` with your actual Neon connection string.
-```env
-DATABASE_URL=postgresql://<NEON_USERNAME>:<NEON_PASSWORD>@<NEON_HOST>/<DATABASE_NAME>?sslmode=require
-```
+- **Automated Statement Analysis:** Ingest and parse bank statements to automatically flag suspicious transaction patterns.
+- **AI Investigator Summary:** Utilizes local LLMs (via Ollama) to instantly generate concise, actionable executive summaries detailing risk, confidence scores, and next steps for the investigator.
+- **Advanced Graph & Network Analysis:** Deep transaction monitoring that detects complex typologies including:
+  - *Layering & Circular Flow*
+  - *Structuring (Smurfing)*
+  - *Dormant Account Revival*
+  - *High-Risk Beneficiary Bursts*
+- **Evidence Locker & Auditing:** Immutable audit trails for all case actions, status changes, and evidence uploads, ensuring full regulatory compliance.
+- **Digital Signatures & SIO Actions:** Secure case closure and escalation requiring investigator digital signatures.
+- **Automated FIR & Dossier Generation:** One-click PDF report generation detailing the entire lifecycle of the investigation.
 
-### 2. Redis Setup Locally
-Redis is required for Celery and Rate Limiting.
-- On Ubuntu/Debian: `sudo apt install redis-server`
-- On Mac (Homebrew): `brew install redis`
-- On Windows: Use WSL2 or Docker (`docker run -p 6379:6379 -d redis`)
-Ensure it runs on `localhost:6379`.
+## 🛠️ Technology Stack
 
-### 3. Environment Variables
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-Update all required secrets.
+- **Backend:** Flask (Python), SQLAlchemy, PostgreSQL (Neon)
+- **Frontend:** React.js, Vite
+- **AI Engine:** Ollama (Local LLM Integration)
+- **PDF Generation:** WeasyPrint / ReportLab
 
-### 4. Database Migrations
-Initialize and upgrade your database schema:
-```bash
-flask db init
-flask db migrate -m "Initial migration"
-flask db upgrade
-```
+## 🚀 Getting Started
 
-### 5. Running the Flask Server
-```bash
-python run.py
-```
-Server runs on `http://localhost:5000`.
+### Prerequisites
+- Node.js & npm
+- Python 3.9+
+- PostgreSQL database
+- Ollama (installed locally for AI features)
 
-### 6. Running the Celery Worker
-In a separate terminal, start the Celery worker:
-```bash
-celery -A celery_worker.celery worker --loglevel=info
-```
+### Backend Setup
+1. Navigate to the root directory and create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Create a `.env` file and configure your database and JWT keys:
+   ```env
+   DATABASE_URL=postgresql://user:password@host/dbname
+   JWT_SECRET_KEY=your_secret_key
+   ```
+4. Run migrations and start the server:
+   ```bash
+   flask db upgrade
+   flask run
+   ```
 
-## Documentation
-- See `SCHEMA.md` for JSON structures and API endpoints.
+### Frontend Setup
+1. Navigate to the `frontend` directory:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-## Adding a New Bank PDF Format
-1. Open `app/parsers/pdf_parser.py`.
-2. Update the `detect_bank` function to include new header keywords.
-3. If the standard extraction fails, add specific table extraction rules in `parse_pdf` using `pdfplumber` or `camelot`.
-4. Update `app/normalizer/normalizer.py` if the new bank introduces new column variations not currently handled.
+## 🔒 Security & Privacy
+All AI analysis is performed locally or through secure endpoints to ensure PII and sensitive financial data never leave the designated secure environment.

@@ -1,8 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Download, Trash2, Folder } from 'lucide-react';
 
 export default function Evidence({ cases = [], evidence, selectedCase, api, setEvidence, selectedCaseId, setSelectedCaseId }) {
   const items = evidence || [];
+
+  useEffect(() => {
+    const fetchLatestEvidence = async () => {
+      if (!selectedCaseId || !api) return;
+      try {
+        const data = await api(`/evidence/${selectedCaseId}`);
+        if (setEvidence) setEvidence(data);
+      } catch (err) {
+        console.error('Failed to fetch evidence', err);
+      }
+    };
+    fetchLatestEvidence();
+  }, [selectedCaseId, api, setEvidence]);
 
   const handleDownload = async (item) => {
     if (!api) return;

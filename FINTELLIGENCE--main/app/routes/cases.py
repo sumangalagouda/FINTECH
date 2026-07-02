@@ -22,7 +22,10 @@ def get_cases():
     user = User.query.get(current_user_id)
     
     if user and user.role == 'supervisor':
-        cases = Case.query.filter(Case.status.in_(['escalated', 'pending_sio_closure', 'closed'])).all()
+        cases = Case.query.filter(Case.status.in_([
+            'escalated', 'pending_sio_closure', 'closed', 
+            'fir_recommended', 'under_review', 'escalated_external'
+        ])).all()
     else:
         cases = Case.query.filter((Case.created_by == current_user_id) | (Case.assigned_to == current_user_id)).all()
     
@@ -92,6 +95,7 @@ def get_case_detail(case_id):
         "severity": c.severity,
         "risk_level": c.risk_level,
         "suspicion_score": c.suspicion_score,
+        "ai_summary": c.ai_summary,
         "account_holder": account_holder,
         "account_number": account_number,
         "bank_name": bank_name,
@@ -101,6 +105,84 @@ def get_case_detail(case_id):
         "total_credited": total_credited,
         "statements": [{"id": s.id, "filename": s.filename, "status": s.upload_status} for s in c.statements]
     }), 200
+
+
+def generate_ai_summary_for_case(case_id, force=False):
+    from app.ai.ollama_client import call_ollama as query_groq
+    c = Case.query.get(case_id)
+    if not c:
+        return None
+    
+    if c.ai_summary and not force:
+        return c.ai_summary
+        
+    # Extract necessary fields before starting the long AI process
+    # to avoid holding the database session and locking SQLite
+    case_suspicion_score = c.suspicion_score
+    case_severity = c.severity
+    account_holder = c.statements[0].account_holder if c.statements else 'Unknown'
+    account_number = c.statements[0].account_number if c.statements else 'Unknown'
+    bank_name = c.statements[0].bank_name if c.statements else 'Unknown'
+    
+    prompt = f"""
+Write a highly concise AI Investigation Summary for this flagged bank account in exactly 3 sections.
+Format exactly like this, using headers and bullet points:
+
+### Executive Summary
+(2 sentences on overall risk and suspicion level)
+
+### Key Suspicious Behaviors
+- (Bullet point 1)
+- (Bullet point 2)
+- (Bullet point 3)
+
+### Recommended Actions
+- (Action 1)
+- (Action 2)
+
+OUTPUT RULES:
+- Never hallucinate or infer guilt.
+- Be extremely brief and direct. Max 150 words total.
+
+CASE FACTS:
+- Case ID: {case_id}
+- Suspicion Score: {case_suspicion_score}
+- Severity: {case_severity}
+- Account Holder: {account_holder}
+- Bank: {bank_name}
+"""
+    try:
+        # We don't hold the DB connection open during this slow call!
+        summary_text = query_groq(
+            "You are a concise financial crime investigator. Respond only with the requested Markdown summary.",
+            prompt,
+            max_tokens=350
+        )
+        
+        # Re-fetch the case to update it now that we have the text
+        c_update = Case.query.get(case_id)
+        if c_update:
+            c_update.ai_summary = summary_text
+            db.session.commit()
+            
+        return summary_text
+    except Exception as e:
+        print(f"Error generating AI summary: {e}")
+        return None
+
+@cases_bp.route('/<case_id>/generate-summary', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def generate_ai_summary(case_id):
+    # Optional force regenerate
+    data = request.get_json() or {}
+    force = data.get('force', False)
+    
+    summary_text = generate_ai_summary_for_case(case_id, force=force)
+    if summary_text:
+        return jsonify({"ai_summary": summary_text}), 200
+    else:
+        return jsonify({"error": "Failed to generate AI summary"}), 500
 
 @cases_bp.route('/<case_id>/transactions', methods=['GET'])
 @jwt_required()

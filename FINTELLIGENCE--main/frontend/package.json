@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
     "antd": "^6.4.4",
+    "axios": "^1.18.1",
     "cytoscape": "^3.34.0",
     "cytoscape-dagre": "^4.0.0",
     "d3": "^7.9.0",
@@ -22,6 +23,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-leaflet": "^5.0.0",
+    "react-markdown": "^10.1.0",
     "reactflow": "^11.11.4",
     "recharts": "^3.8.1"
   },
