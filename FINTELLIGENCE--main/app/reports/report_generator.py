@@ -1,20 +1,19 @@
 import os
 import io
-from flask import Blueprint, jsonify, send_file
-from flask_jwt_extended import jwt_required
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-from reportlab.pdfgen import canvas
+import time
+from datetime import datetime
+from flask import Blueprint, jsonify, send_file, current_app, render_template
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from markupsafe import Markup
+import re
 
 from app.models.case import Case
 from app.models.transaction import Transaction
 from app.models.detection_result import DetectionResult
 from app.models.investigator_note import InvestigatorNote
-from app.models.verification import Verification
-from app.models.supervisor_approval import SupervisorApproval
-from app.intelligence.fir_readiness import calculate_fir_readiness
+from app.models.user import User
+from app.models.evidence_item import EvidenceItem
+from app.extensions import db
 from app.ai.ollama_client import call_ollama as query_groq
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
@@ -28,142 +27,160 @@ def add_watermark(canvas, doc):
     canvas.drawCentredString(0, 0, "CONFIDENTIAL")
     canvas.restoreState()
 
+def simple_markdown_to_html(text):
+    if not text:
+        return ""
+    # Headers
+    text = re.sub(r'^### (.*)', r'<h3>\1</h3>', text, flags=re.MULTILINE)
+    text = re.sub(r'^## (.*)', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+    text = re.sub(r'^# (.*)', r'<h1>\1</h1>', text, flags=re.MULTILINE)
+    # Bold
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    # Lists
+    text = re.sub(r'^\s*-\s+(.*)', r'<li>\1</li>', text, flags=re.MULTILINE)
+    # Newlines
+    text = text.replace('\n', '<br/>')
+    return Markup(text)
+
 @reports_bp.route('/generate/<case_id>', methods=['GET'])
 @jwt_required()
 def generate_pdf_report(case_id):
-    from flask import current_app
-    from app.models.evidence_item import EvidenceItem
-    from app.extensions import db
-    from flask_jwt_extended import get_jwt_identity
-    import time
-    
     current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
 
     case = Case.query.get(case_id)
     if not case:
         return jsonify({"error": "Case not found"}), 404
 
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
+    # Get Case details
+    account_holder = "Unknown"
+    account_number = "Unknown"
+    bank_name = "Unknown"
+    statement_period = "Unknown"
     
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=30,
-        textColor=colors.HexColor('#1E3A8A'),
-        alignment=1
-    )
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=16,
-        spaceBefore=20,
-        spaceAfter=10,
-        textColor=colors.HexColor('#2563EB')
-    )
-    normal_style = styles['Normal']
+    if case.statements:
+        s = case.statements[0]
+        account_holder = s.account_holder or account_holder
+        account_number = s.account_number or account_number
+        bank_name = s.bank_name or bank_name
+        if s.statement_period_start and s.statement_period_end:
+            statement_period = f"{s.statement_period_start.strftime('%d %b %Y')} - {s.statement_period_end.strftime('%d %b %Y')}"
 
-    story = []
-
-    # 1. Cover Page
-    story.append(Spacer(1, 150))
-    story.append(Paragraph("FINTELLIGENCE", title_style))
-    story.append(Paragraph("Automated Forensic Investigation Report", title_style))
-    story.append(Spacer(1, 50))
-    story.append(Paragraph(f"<b>Case ID:</b> {case_id}", normal_style))
-    story.append(Paragraph(f"<b>Date:</b> {case.created_at.strftime('%Y-%m-%d') if case.created_at else 'N/A'}", normal_style))
-    story.append(Paragraph(f"<b>Status:</b> {case.status.upper()}", normal_style))
-    story.append(PageBreak())
-
-    # 2. Executive Summary (AI-generated if available)
-    story.append(Paragraph("Executive Summary", heading_style))
-    try:
-        summary_text = query_groq(
-            f"Provide a 2-paragraph executive summary for case {case_id} involving money laundering."
-        )
-    except Exception:
-        summary_text = (
-            "Executive summary unavailable because AI services are not configured or failed to generate. "
-            "The rest of this report still contains case details and detector insights."
-        )
-    story.append(Paragraph(summary_text, normal_style))
+    # Get Detectors
+    detectors = DetectionResult.query.filter_by(case_id=case_id).all()
     
-    # 3. Risk Assessment
-    story.append(Paragraph("Risk Assessment", heading_style))
-    story.append(Paragraph(f"<b>Overall Risk Score:</b> {case.suspicion_score or 'N/A'}", normal_style))
-    story.append(Paragraph(f"<b>Risk Level:</b> {case.risk_level or 'N/A'}", normal_style))
-    
-    # 4. Detector Results Summary
-    story.append(Paragraph("Triggered Detectors", heading_style))
-    detectors = DetectionResult.query.filter_by(case_id=case_id, triggered=True).all()
-    if detectors:
-        data = [["Detector", "Score", "Severity"]]
-        for d in detectors:
-            data.append([d.detector_name, str(d.score), d.severity])
-        t = Table(data, colWidths=[200, 100, 100])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.grey),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('GRID', (0,0), (-1,-1), 1, colors.black)
-        ]))
-        story.append(t)
-    else:
-        story.append(Paragraph("No detectors triggered.", normal_style))
-
-    # 5. FIR Readiness
-    story.append(Paragraph("FIR Readiness Assessment", heading_style))
-    fir_data = calculate_fir_readiness(case_id)
-    story.append(Paragraph(f"<b>Readiness Score:</b> {fir_data.get('fir_readiness_score', 0)}", normal_style))
-    story.append(Paragraph(f"<b>Ready for FIR:</b> {'Yes' if fir_data.get('ready') else 'No'}", normal_style))
-    
-    if fir_data.get('blocking_factors'):
-        story.append(Paragraph("<b>Blocking Factors:</b>", normal_style))
-        for factor in fir_data['blocking_factors']:
-            story.append(Paragraph(f"- {factor}", normal_style))
-
-    # 6. Verification Status
-    story.append(Paragraph("Verification Status", heading_style))
-    v = Verification.query.filter_by(case_id=case_id).first()
-    if v:
-        story.append(Paragraph(f"Customer Contacted: {'Yes' if v.customer_contacted else 'No'}", normal_style))
-        story.append(Paragraph(f"Documents Received: {'Yes' if v.documents_received else 'No'}", normal_style))
-        story.append(Paragraph(f"Source Verified: {'Yes' if v.source_verified else 'No'}", normal_style))
-        story.append(Paragraph(f"Completion: {v.completion_percentage}%", normal_style))
-    else:
-        story.append(Paragraph("No verification record found.", normal_style))
-
-    doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
-    
-    upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
-    evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
-    os.makedirs(evidence_dir, exist_ok=True)
-    
-    timestamp = int(time.time())
-    filename = f"report_{case_id}_{timestamp}.pdf"
-    pdf_path = os.path.join(evidence_dir, filename)
-    
-    with open(pdf_path, 'wb') as f:
-        f.write(buffer.getvalue())
+    # Get Transactions
+    txns = Transaction.query.filter_by(case_id=case_id).order_by(Transaction.date.desc()).all()
+    top_transactions = [t for t in txns if t.is_flagged][:10]
+    if not top_transactions:
+        top_transactions = txns[:5]
         
-    evidence = EvidenceItem(
-        case_id=case_id,
-        item_type="report",
-        file_path=pdf_path,
-        uploaded_by=current_user_id,
-        note_text="Automatically generated Case Summary Report"
-    )
-    db.session.add(evidence)
-    db.session.commit()
+    max_amount = max([float(t.amount) for t in top_transactions]) if top_transactions else 1
+        
+    total_debited = sum(float(t.amount) for t in txns if t.type == 'debit')
     
-    buffer.seek(0)
+    # Get Investigator Notes
+    notes = InvestigatorNote.query.filter_by(case_id=case_id).order_by(InvestigatorNote.created_at.desc()).all()
 
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name=filename,
-        mimetype='application/pdf'
+    # Generate or Retrieve AI Summary
+    from app.routes.cases import generate_ai_summary_for_case
+    
+    summary_text = case.ai_summary
+    if not summary_text:
+        # Generate it synchronously using the optimized shared function
+        summary_text = generate_ai_summary_for_case(case_id, force=False)
+        
+    if not summary_text:
+        summary_text = "Analysis indicates multi-layered movement of funds. AI summary unavailable."
+
+    # Calculate Confidence and Evidence Score
+    confidence = min(100, max(50, 60 + round(case.suspicion_score or 0)))
+    evidence_score = min(100, max(40, 50 + round((case.suspicion_score or 0) * 0.5)))
+
+    rendered_html = render_template(
+        'investigation_report.html',
+        investigator_id=f"INV-{datetime.now().year}-{user.id if user else '0000'}",
+        case_display_id=case.display_id or f"{case.id[:8]}",
+        account_holder=account_holder,
+        account_number=account_number,
+        bank_name=bank_name,
+        statement_period=statement_period,
+        severity=case.severity or 'High',
+        suspicion_score=round(case.suspicion_score or 0),
+        evidence_score=evidence_score,
+        confidence=confidence,
+        ai_summary=simple_markdown_to_html(summary_text),
+        detectors=detectors,
+        top_transactions=top_transactions,
+        max_amount=max_amount,
+        total_debited=total_debited,
+        investigator_notes=notes,
+        investigator_name=user.name if user else "Investigator",
+        today_date=datetime.now().strftime("%d %b %Y")
     )
+
+    # Try to generate PDF using WeasyPrint, fallback to HTML if GTK3 is missing on Windows
+    try:
+        from weasyprint import HTML
+        pdf_bytes = HTML(string=rendered_html).write_pdf()
+        
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
+        os.makedirs(evidence_dir, exist_ok=True)
+        
+        timestamp = int(time.time())
+        filename = f"report_{case_id}_{timestamp}.pdf"
+        pdf_path = os.path.join(evidence_dir, filename)
+        
+        with open(pdf_path, 'wb') as f:
+            f.write(pdf_bytes)
+            
+        evidence = EvidenceItem(
+            case_id=case_id,
+            item_type="report",
+            file_path=pdf_path,
+            uploaded_by=current_user_id,
+            note_text="Automatically generated Case Summary Report (New Format)"
+        )
+        db.session.add(evidence)
+        db.session.commit()
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+    except Exception as e:
+        # Fallback to HTML if WeasyPrint fails (e.g. missing gobject on Windows)
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
+        os.makedirs(evidence_dir, exist_ok=True)
+        
+        timestamp = int(time.time())
+        filename = f"report_{case_id}_{timestamp}.html"
+        html_path = os.path.join(evidence_dir, filename)
+        
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(rendered_html)
+            
+        evidence = EvidenceItem(
+            case_id=case_id,
+            item_type="report",
+            file_path=html_path,
+            uploaded_by=current_user_id,
+            note_text="Automatically generated Case Summary Report (HTML Fallback)"
+        )
+        db.session.add(evidence)
+        db.session.commit()
+
+        # Add a print script to the HTML so it prompts the user to save as PDF
+        print_script = "<script>window.onload = function() { window.print(); }</script>"
+        printable_html = rendered_html.replace("</body>", f"{print_script}</body>")
+
+        return send_file(
+            io.BytesIO(printable_html.encode('utf-8')),
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/html'
+        )

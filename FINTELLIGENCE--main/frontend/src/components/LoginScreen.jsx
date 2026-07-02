@@ -52,15 +52,25 @@ export default function LoginScreen({ setToken }) {
             </label>
             <div className="login-roles">
               <span>Select Role (Optional)</span>
-              <div className="radio-group">
-                <label>
-                  <input type="radio" value="investigating_officer" checked={role === 'investigating_officer'} onChange={(e) => setRole(e.target.value)} />
+
+              <div className="role-selector">
+                <button
+                  type="button"
+                  className={`role-card ${role === 'investigating_officer' ? 'active' : ''
+                    }`}
+                  onClick={() => setRole('investigating_officer')}
+                >
                   Investigation Officer
-                </label>
-                <label>
-                  <input type="radio" value="supervisor" checked={role === 'supervisor'} onChange={(e) => setRole(e.target.value)} />
+                </button>
+
+                <button
+                  type="button"
+                  className={`role-card ${role === 'supervisor' ? 'active' : ''
+                    }`}
+                  onClick={() => setRole('supervisor')}
+                >
                   Senior Investigation Officer
-                </label>
+                </button>
               </div>
             </div>
             {error && <div className="form-error">{error}</div>}

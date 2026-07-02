@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import CaseList from '../components/CaseList';
 
 export default function Ai({ api, cases, selectedCaseId, setSelectedCaseId, chat, setChat, transactions }) {
@@ -79,7 +80,9 @@ export default function Ai({ api, cases, selectedCaseId, setSelectedCaseId, chat
           chat.map((item, index) => (
             <div className={`chat-line ${item.role}`} key={`${item.role}-${index}`}>
               <strong>{item.role === 'user' ? 'You' : 'AI Investigator'}</strong>
-              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{item.content}</pre>
+              <div className="markdown-body" style={{ margin: 0, marginTop: '8px', fontSize: '14px', lineHeight: '1.6' }}>
+                <ReactMarkdown>{item.content}</ReactMarkdown>
+              </div>
             </div>
           ))
         )}

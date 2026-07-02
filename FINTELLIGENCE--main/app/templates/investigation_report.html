@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Investigation Report</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+        body {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 10pt;
+            color: #111;
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+        .logo-placeholder {
+            width: 60px;
+            height: 70px;
+            background-color: #1a365d;
+            color: #fff;
+            text-align: center;
+            line-height: 70px;
+            font-weight: bold;
+            font-size: 10px;
+            border-radius: 4px;
+        }
+        .header-title {
+            text-align: center;
+            flex-grow: 1;
+        }
+        .header-title h1 {
+            margin: 0;
+            font-size: 24pt;
+            color: #1a365d;
+            letter-spacing: 2px;
+        }
+        .header-title h2 {
+            margin: 0;
+            font-size: 12pt;
+            font-weight: normal;
+            color: #333;
+        }
+        .report-title {
+            text-align: center;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-top: 10px;
+            color: #1a365d;
+            text-transform: uppercase;
+        }
+        .report-subtitle {
+            text-align: center;
+            font-size: 10pt;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .flex-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .case-details {
+            flex: 2;
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .case-details th, .case-details td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .case-details th {
+            background-color: #1a365d;
+            color: #fff;
+            width: 140px;
+        }
+        .metrics-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .metric-box {
+            border: 1px solid #ccc;
+            background-color: #fafafa;
+            text-align: center;
+            padding: 8px 5px;
+        }
+        .metric-box.danger {
+            background-color: #fff0f0;
+            border-color: #ffcccc;
+        }
+        .metric-box.warning {
+            background-color: #fffbe6;
+            border-color: #ffe58f;
+        }
+        .metric-title {
+            font-size: 8pt;
+            font-weight: bold;
+            color: #333;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 16pt;
+            font-weight: bold;
+        }
+        .metric-value.red { color: #dc2626; }
+        .metric-value.orange { color: #d97706; }
+        .metric-value.green { color: #16a34a; }
+        
+        .section-box {
+            border: 1px solid #ccc;
+            margin-bottom: 15px;
+        }
+        .section-header {
+            background-color: #f1f5f9;
+            padding: 5px 10px;
+            font-weight: bold;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+            font-size: 11pt;
+            color: #1a365d;
+        }
+        .section-content {
+            padding: 10px;
+            line-height: 1.4;
+        }
+        
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 9pt;
+        }
+        table.data-table th, table.data-table td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+        table.data-table th {
+            background-color: #1a365d;
+            color: white;
+        }
+        table.data-table td.left {
+            text-align: left;
+        }
+        
+        .timeline-box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            background-color: #f8fafc;
+        }
+        
+        .notes-box {
+            border: 1px solid #ccc;
+            display: flex;
+        }
+        .notes-content {
+            padding: 15px;
+            flex: 2;
+            border-right: 1px solid #ccc;
+        }
+        .notes-content ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .notes-content li {
+            margin-bottom: 6px;
+        }
+        .signature-box {
+            padding: 15px;
+            flex: 1;
+            background-color: #fafafa;
+        }
+        .signature-line {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="logo-placeholder">LOGO</div>
+        <div class="header-title">
+            <h1>CIDECODE 2026</h1>
+            <h2>CCITR-CID KARNATAKA POLICE</h2>
+        </div>
+        <div class="logo-placeholder">LOGO</div>
+    </div>
+
+    <div class="report-title">INVESTIGATION REPORT</div>
+    <div class="report-subtitle">Investigator ID: {{ investigator_id }}</div>
+
+    <div class="flex-row">
+        <table class="case-details">
+            <tr>
+                <th>Case id</th>
+                <td>{{ case_display_id }}</td>
+            </tr>
+            <tr>
+                <th>Account Holder</th>
+                <td>{{ account_holder }}</td>
+            </tr>
+            <tr>
+                <th>Account number</th>
+                <td>{{ account_number }}</td>
+            </tr>
+            <tr>
+                <th>Bank name and branch</th>
+                <td>{{ bank_name }}</td>
+            </tr>
+            <tr>
+                <th>Period</th>
+                <td>{{ statement_period }}</td>
+            </tr>
+        </table>
+
+        <div class="metrics-grid">
+            <div class="metric-box danger">
+                <div class="metric-title">SEVERITY</div>
+                <div class="metric-value red">{{ severity | upper }}</div>
+            </div>
+            <div class="metric-box danger">
+                <div class="metric-title">SUSPICIONS SCORE</div>
+                <div class="metric-value red">{{ suspicion_score }}/100</div>
+            </div>
+            <div class="metric-box warning">
+                <div class="metric-title">EVIDENCE SCORE</div>
+                <div class="metric-value orange">{{ evidence_score }}/100</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-title">CONFIDENCE</div>
+                <div class="metric-value green">{{ confidence }}%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-box">
+        <div class="section-header">
+            AI INVESTIGATION SUMMARY
+        </div>
+        <div class="section-content">
+            {{ ai_summary }}
+        </div>
+    </div>
+
+    <div style="font-weight: bold; color: #1a365d; margin-bottom: 5px; text-transform: uppercase;">Detector Results</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Detector</th>
+                <th>Triggered (Yes or No)</th>
+                <th>Severity</th>
+                <th>Score</th>
+                <th class="left">Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in detectors %}
+            <tr>
+                <td class="left">{{ d.detector_name }}</td>
+                <td style="color: {{ 'red' if d.triggered else 'green' }}; font-weight: bold;">
+                    {{ 'Yes' if d.triggered else 'No' }}
+                </td>
+                <td style="color: {{ 'red' if d.severity == 'High' else 'green' }};">{{ d.severity | capitalize }}</td>
+                <td style="color: {{ 'red' if d.score > 50 else 'green' }};">{{ d.score }}</td>
+                <td class="left">{{ d.reason if d.reason else 'Flagged transactions detected' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not detectors %}
+            <tr><td colspan="5">No detectors triggered for this case.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="timeline-box">
+        <div style="font-weight: bold; color: #1a365d; text-transform: uppercase; margin-bottom: 5px;">VISUALS: FUND FLOW ANALYSIS</div>
+        <div style="font-size: 9pt; margin-bottom: 10px;">Movement of funds from Source Account to Final Beneficiary</div>
+        
+        <div style="padding: 20px; border: 1px dashed #999; background: #fff; color: #666;">
+            <!-- CSS Fund Flow diagram visualization -->
+            <div style="display: flex; height: 160px; align-items: flex-end; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ccc; padding-bottom: 10px; padding-top: 20px;">
+                {% for t in top_transactions %}
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative;">
+                    <div style="font-size: 8px; color: #999; position: absolute; top: -16px;">₹{{ '{:,.0f}'.format(t.amount|float) }}</div>
+                    <div style="width: 100%; background-color: {{ '#dc2626' if t.is_flagged else '#3b82f6' }}; min-height: 4px; height: {{ (t.amount|float / max_amount) * 120 }}px;" title="₹{{ t.amount }}">
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <strong>Fund Flow Analysis Summary:</strong><br><br>
+            Total Amount Transferred: ₹{{ '{:,.2f}'.format(total_debited) }}<br>
+            Analysis indicates multi-layered movement of funds characteristic of {{ severity }} severity incidents.
+        </div>
+    </div>
+
+    <div style="font-weight: bold; color: #1a365d; margin-bottom: 5px; text-transform: uppercase;">Flagged Transaction Timeline</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th class="left">Description</th>
+                <th>Deposit OR Credit</th>
+                <th>Amount (₹)</th>
+                <th>Flag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in top_transactions %}
+            <tr>
+                <td>{{ t.date.strftime('%d %b %Y %H:%M %p') if t.date else 'N/A' }}</td>
+                <td class="left">{{ t.description }} ({{ t.receiver_account or 'Unknown' }})</td>
+                <td style="color: green;">{{ t.type | capitalize }}</td>
+                <td>{{ '{:,.2f}'.format(t.amount|float) }}</td>
+                <td style="color: red; font-weight: bold;">🚩</td>
+            </tr>
+            {% endfor %}
+            {% if not top_transactions %}
+            <tr><td colspan="5">No specific flagged transactions available.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <div class="notes-box">
+        <div class="notes-content">
+            <div style="font-weight: bold; color: #1a365d; text-transform: uppercase; margin-bottom: 10px; font-size: 11pt;">Investigator Notes</div>
+            <ul>
+                {% for note in investigator_notes %}
+                <li>{{ note.note_text }}</li>
+                {% endfor %}
+                {% if not investigator_notes %}
+                <li>No notes recorded for this investigation.</li>
+                {% endif %}
+            </ul>
+        </div>
+        <div class="signature-box">
+            <div class="signature-line">
+                Investigated by: <strong>{{ investigator_name }}</strong>
+            </div>
+            <div class="signature-line">
+                Name: ______________________
+            </div>
+            <div class="signature-line">
+                Date: <strong>{{ today_date }}</strong>
+            </div>
+            <div class="signature-line">
+                Signature: __________________
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

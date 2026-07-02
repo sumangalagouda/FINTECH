@@ -54,15 +54,16 @@ def create_app(config_name='default'):
     # New additive route blueprints
     from app.routes.dashboard import dashboard_bp
     from app.routes.escalation import escalation_bp
+    from app.routes.sio_action import sio_bp
 
     app.register_blueprint(intelligence_bp)
     app.register_blueprint(suspicion_bp)
     app.register_blueprint(governance_bp)
     app.register_blueprint(evidence_bp)
     app.register_blueprint(reports_bp)
-
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(escalation_bp)
+    app.register_blueprint(sio_bp)
 
     return app
 

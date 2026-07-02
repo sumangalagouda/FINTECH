@@ -46,27 +46,52 @@ def generate_dossier(case_id):
         )
         
     else:
-        # Generate DOCX
+        from app.ai.ollama_client import call_ollama
+        
+        system_prompt = (
+            f"You are a forensic data analyst compiling a strictly factual Case Dossier for the {authority.replace('_', ' ').title()}. "
+            "Write highly professional, investigative text based on the provided facts. "
+            "Do NOT hallucinate. Do not include asterisks or markdown, just plain text paragraphs."
+        )
+        user_prompt = f"""
+Please generate the intelligence analysis section of the CASE DOSSIER based on these case facts.
+
+TEMPLATE TO FOLLOW:
+PART I: EXECUTIVE SUMMARY
+- Summary of Intelligence: [AI-generated paragraph summarizing the laundering or fraud mechanism]
+
+PART II: FINANCIAL ANALYSIS & RED FLAGS
+- Heatmap / Detector Breakdown: [Describe why the score is high based on the risk level]
+- Recommended next steps for {authority.replace('_', ' ').title()}.
+
+CASE FACTS:
+- Case ID: {case_id}
+- Account: {case.bank_name} - {case.account_number}
+- Suspicion Score: {case.suspicion_score}/100
+- Risk Level: {case.risk_level}
+- Total Transactions: {len(transactions)}
+"""
+        try:
+            dossier_ai_text = call_ollama(system_prompt, user_prompt, max_tokens=1000)
+        except Exception as e:
+            dossier_ai_text = f"[Error generating AI intelligence report: {str(e)}]\n\n"
+
         doc = Document()
         doc.add_heading(f"FINTELLIGENCE Dossier: {authority.replace('_', ' ').title()}", 0)
         
         doc.add_heading("Case Details", level=1)
         doc.add_paragraph(f"Case ID: {case_id}")
         doc.add_paragraph(f"Risk Score: {case.suspicion_score}")
+        doc.add_paragraph(f"Account: {case.bank_name} - {case.account_number}")
         
-        if authority == 'bank_fraud':
-            doc.add_heading("Transaction Details & Pass-Through", level=1)
-            doc.add_paragraph("This section contains transaction amounts, account details, and pass-through ratios relevant for bank fraud investigation.")
-            # Simplified mock content
-            
-        elif authority == 'aml_team':
-            doc.add_heading("AML Patterns & Layering Chains", level=1)
-            doc.add_paragraph("This section details identified AML patterns such as layering chains and structuring evidence.")
-            
-        elif authority == 'cyber_crime':
-            doc.add_heading("Digital Trail & Timing Analysis", level=1)
-            doc.add_paragraph("This section focuses on the digital transaction trail and odd-hour timing anomalies.")
-            
+        doc.add_heading("AI Intelligence & Analysis", level=1)
+        for line in dossier_ai_text.split('\n'):
+            if line.strip():
+                clean_line = line.replace('**', '').replace('##', '').replace('*', '-')
+                doc.add_paragraph(clean_line)
+                
+        doc.add_heading("Transaction Details Summary", level=1)
+        doc.add_paragraph(f"Total Transactions analyzed: {len(transactions)}")
         buffer = io.BytesIO()
         doc.save(buffer)
         buffer.seek(0)

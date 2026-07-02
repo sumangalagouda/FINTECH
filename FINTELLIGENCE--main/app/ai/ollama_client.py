@@ -6,7 +6,7 @@ def call_ollama(system_prompt: str, user_prompt: str, max_tokens: int = 2048) ->
     Calls the local Ollama API to generate a response.
     """
     url = os.environ.get("OLLAMA_API_URL", "http://localhost:11434/api/chat")
-    model = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
+    model = os.environ.get("OLLAMA_MODEL", "phi3")
     
     payload = {
         "model": model,
@@ -22,7 +22,7 @@ def call_ollama(system_prompt: str, user_prompt: str, max_tokens: int = 2048) ->
     }
     
     try:
-        resp = requests.post(url, json=payload, timeout=120.0)
+        resp = requests.post(url, json=payload, timeout=300.0)
         resp.raise_for_status()
         data = resp.json()
         return data.get("message", {}).get("content", "")

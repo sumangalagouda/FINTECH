@@ -16,6 +16,7 @@ class Case(db.Model):
     fir_readiness_score = db.Column(db.Float, default=0.0)
     suspicion_score = db.Column(db.Float, default=0.0)
     risk_level = db.Column(db.String(50), default='low') # low/medium/high/critical
+    ai_summary = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
