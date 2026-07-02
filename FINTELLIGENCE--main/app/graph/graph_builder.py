@@ -278,7 +278,12 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
                 attrs["last_seen"]
                 .isoformat()
             )
-
+        print(
+            node_id,
+            attrs["total_received"],
+            attrs["total_sent"],
+            attrs["transaction_count"]
+        )
         G.add_node(
             node_id,
             **attrs
@@ -303,7 +308,16 @@ def build_multi_statement_graph(
         )
         .all()
     )
+    print("\n===== GRAPH DEBUG =====")
 
+    for t in Transaction.query.filter_by(case_id=case_id).limit(10):
+        print(
+            t.type,
+            t.sender_account,
+            t.receiver_account,
+            t.description
+        )
+    print("=======================\n")
     return build_graph(transactions)
 
 
