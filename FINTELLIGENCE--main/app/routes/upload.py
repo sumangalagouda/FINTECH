@@ -126,12 +126,38 @@ def upload_file():
                     db_data['id'] = db_data.pop('txn_id')
                 if 'description' in db_data and db_data['description']:
                     db_data['description'] = str(db_data['description'])[:500]
+
+                # Counterparty Inference for Real Statements
+                from app.utils.entity_extractor import infer_counterparty
+                
+                desc = db_data.get('description', '')
+                txn_type = db_data.get('type')
+                counterparty = infer_counterparty(desc)
+                
+                if counterparty:
+                    if txn_type == 'credit':
+                        if not db_data.get('sender_account'):
+                            db_data['sender_account'] = counterparty
+                        if not db_data.get('receiver_account'):
+                            db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
+                    elif txn_type == 'debit':
+                        if not db_data.get('sender_account'):
+                            db_data['sender_account'] = 'PRIMARY_ACCOUNT'
+                        if not db_data.get('receiver_account'):
+                            db_data['receiver_account'] = counterparty
+                            
+                # Fallback to ensure we always have PRIMARY_ACCOUNT for real CSVs without explicit accounts
+                if txn_type == 'credit' and not db_data.get('receiver_account'):
+                    db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
+                if txn_type == 'debit' and not db_data.get('sender_account'):
+                    db_data['sender_account'] = 'PRIMARY_ACCOUNT'
+
                 txn = Transaction(**db_data)
                 db.session.add(txn)
                 
                 # Update Beneficiaries
-                sender = txn_data.get('sender_account')
-                receiver = txn_data.get('receiver_account')
+                sender = db_data.get('sender_account')
+                receiver = db_data.get('receiver_account')
                 amt = float(txn_data.get('amount') or 0.0)
                 
                 if sender:
