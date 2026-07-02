@@ -120,21 +120,90 @@ def generate_pdf_report(case_id):
     )
 
     # Try to generate PDF using WeasyPrint, fallback to HTML if GTK3 is missing on Windows
+    # try:
+    #     from weasyprint import HTML
+    #     pdf_bytes = HTML(string=rendered_html).write_pdf()
+        
+    #     upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+    #     evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
+    #     os.makedirs(evidence_dir, exist_ok=True)
+        
+    #     timestamp = int(time.time())
+    #     filename = f"report_{case_id}_{timestamp}.pdf"
+    #     pdf_path = os.path.join(evidence_dir, filename)
+        
+    #     with open(pdf_path, 'wb') as f:
+    #         f.write(pdf_bytes)
+            
+    #     evidence = EvidenceItem(
+    #         case_id=case_id,
+    #         item_type="report",
+    #         file_path=pdf_path,
+    #         uploaded_by=current_user_id,
+    #         note_text="Automatically generated Case Summary Report (New Format)"
+    #     )
+    #     db.session.add(evidence)
+    #     db.session.commit()
+
+    #     return send_file(
+    #         io.BytesIO(pdf_bytes),
+    #         as_attachment=True,
+    #         download_name=filename,
+    #         mimetype='application/pdf'
+    #     )
+    # except Exception as e:
+    #     # Fallback to HTML if WeasyPrint fails (e.g. missing gobject on Windows)
+    #     upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+    #     evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
+    #     os.makedirs(evidence_dir, exist_ok=True)
+        
+    #     timestamp = int(time.time())
+    #     filename = f"report_{case_id}_{timestamp}.html"
+    #     html_path = os.path.join(evidence_dir, filename)
+        
+    #     with open(html_path, 'w', encoding='utf-8') as f:
+    #         f.write(rendered_html)
+            
+    #     evidence = EvidenceItem(
+    #         case_id=case_id,
+    #         item_type="report",
+    #         file_path=html_path,
+    #         uploaded_by=current_user_id,
+    #         note_text="Automatically generated Case Summary Report (HTML Fallback)"
+    #     )
+    #     db.session.add(evidence)
+    #     db.session.commit()
+
+    #     # Add a print script to the HTML so it prompts the user to save as PDF
+    #     print_script = "<script>window.onload = function() { window.print(); }</script>"
+    #     printable_html = rendered_html.replace("</body>", f"{print_script}</body>")
+
+    #     return send_file(
+    #         io.BytesIO(printable_html.encode('utf-8')),
+    #         as_attachment=True,
+    #         download_name=filename,
+    #         mimetype='text/html'
+    #     )
+# Try to generate PDF using WeasyPrint
     try:
         from weasyprint import HTML
-        pdf_bytes = HTML(string=rendered_html).write_pdf()
-        
+
+        pdf_bytes = HTML(
+            string=rendered_html,
+            base_url=current_app.root_path  # Required for loading static assets (SVG logos)
+        ).write_pdf()
+
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
         os.makedirs(evidence_dir, exist_ok=True)
-        
+
         timestamp = int(time.time())
         filename = f"report_{case_id}_{timestamp}.pdf"
         pdf_path = os.path.join(evidence_dir, filename)
-        
+
         with open(pdf_path, 'wb') as f:
             f.write(pdf_bytes)
-            
+
         evidence = EvidenceItem(
             case_id=case_id,
             item_type="report",
@@ -142,6 +211,7 @@ def generate_pdf_report(case_id):
             uploaded_by=current_user_id,
             note_text="Automatically generated Case Summary Report (New Format)"
         )
+
         db.session.add(evidence)
         db.session.commit()
 
@@ -151,19 +221,22 @@ def generate_pdf_report(case_id):
             download_name=filename,
             mimetype='application/pdf'
         )
+
     except Exception as e:
-        # Fallback to HTML if WeasyPrint fails (e.g. missing gobject on Windows)
+        print(f"WeasyPrint Error: {e}")
+
+        # Fallback to HTML if WeasyPrint fails
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         evidence_dir = os.path.join(upload_folder, 'evidence', case_id)
         os.makedirs(evidence_dir, exist_ok=True)
-        
+
         timestamp = int(time.time())
         filename = f"report_{case_id}_{timestamp}.html"
         html_path = os.path.join(evidence_dir, filename)
-        
+
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(rendered_html)
-            
+
         evidence = EvidenceItem(
             case_id=case_id,
             item_type="report",
@@ -171,12 +244,22 @@ def generate_pdf_report(case_id):
             uploaded_by=current_user_id,
             note_text="Automatically generated Case Summary Report (HTML Fallback)"
         )
+
         db.session.add(evidence)
         db.session.commit()
 
-        # Add a print script to the HTML so it prompts the user to save as PDF
-        print_script = "<script>window.onload = function() { window.print(); }</script>"
-        printable_html = rendered_html.replace("</body>", f"{print_script}</body>")
+        print_script = """
+        <script>
+            window.onload = function() {
+                window.print();
+            }
+        </script>
+        """
+
+        printable_html = rendered_html.replace(
+            "</body>",
+            f"{print_script}</body>"
+        )
 
         return send_file(
             io.BytesIO(printable_html.encode('utf-8')),
