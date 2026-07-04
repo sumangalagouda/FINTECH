@@ -15,6 +15,7 @@ class Case(db.Model):
     created_by = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     fir_readiness_score = db.Column(db.Float, default=0.0)
     suspicion_score = db.Column(db.Float, default=0.0)
+    account_scores = db.Column(db.JSON, default={})
     risk_level = db.Column(db.String(50), default='low') # low/medium/high/critical
     ai_summary = db.Column(db.Text, nullable=True)
 

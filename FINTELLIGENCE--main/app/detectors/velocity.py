@@ -109,15 +109,18 @@ MATCH_THRESHOLD = 0.95      # 95% of credit amount forwarded
 # DETECTOR
 # ============================================================================
 
-def detect_velocity(case_id: str):
+def detect_velocity(case_id: str, statement_id: str = None):
 
-    transactions = (
+    query = (
         Transaction.query
         .join(Statement)
-        .filter(Transaction.case_id == case_id, Transaction.is_failed == False, Statement.is_primary == True)
-        .order_by(Transaction.date)
-        .all()
+        .filter(Transaction.case_id == case_id, Transaction.is_failed == False)
     )
+    
+    if statement_id:
+        query = query.filter(Transaction.statement_id == statement_id)
+
+    transactions = query.order_by(Transaction.date).all()
 
     if len(transactions) < 2:
         return {

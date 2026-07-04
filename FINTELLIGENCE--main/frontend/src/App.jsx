@@ -72,6 +72,7 @@ export default function App() {
   const [caseFilter, setCaseFilter] = useState('all');
   const [cases, setCases] = useState([]);
   const [selectedCaseId, setSelectedCaseId] = useState('');
+  const [selectedStatementId, setSelectedStatementId] = useState(null);
   const [caseDetail, setCaseDetail] = useState(null);
   const [overview, setOverview] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -151,7 +152,11 @@ export default function App() {
 
         setCaseDetail(detail);
 
-        const statementId = detail.statements?.[0]?.id;
+        const statementId = selectedStatementId || detail.statements?.[0]?.id;
+        if (!selectedStatementId && statementId) {
+           setSelectedStatementId(statementId);
+        }
+        
         const [txnPayload, graphData, evidenceData] = await Promise.all([
           statementId ? getStatementTransactions(api, statementId).catch(() => ({ transactions: [] })) : Promise.resolve({ transactions: [] }),
           getCaseGraph(api, selectedCaseId).catch(() => ({ nodes: [], links: [] })),
@@ -167,7 +172,7 @@ export default function App() {
           detectorEndpoints.map(async ([name, path]) => {
             const result = await api(path, {
               method: 'POST',
-              body: JSON.stringify({ case_id: selectedCaseId }),
+              body: JSON.stringify({ case_id: selectedCaseId, statement_id: statementId }),
             });
             return normalizeDetector(name, result);
           })
@@ -204,7 +209,7 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [api, selectedCaseId, token]);
+  }, [api, selectedCaseId, token, selectedStatementId]);
 
   const selectedCase = useMemo(() => {
     const summary = cases.find((item) => item.id === selectedCaseId);
@@ -224,7 +229,7 @@ export default function App() {
         detectorEndpoints.map(async ([name, path]) => {
           const result = await api(path, {
             method: 'POST',
-            body: JSON.stringify({ case_id: selectedCaseId }),
+            body: JSON.stringify({ case_id: selectedCaseId, statement_id: selectedStatementId }),
           });
           return normalizeDetector(name, result);
         }),
@@ -350,6 +355,7 @@ export default function App() {
         {activeView === 'upload' && (
           <UploadPage
             api={api}
+            cases={filteredCases}
             refreshCases={refreshCases}
             selectedCaseId={selectedCaseId}
             setSelectedCaseId={setSelectedCaseId}
@@ -412,10 +418,12 @@ export default function App() {
                   setViewMode={setCaseViewMode}
                   refreshCases={refreshCases}
                   setCaseDetail={setCaseDetail}
+                  selectedStatementId={selectedStatementId}
+                  setSelectedStatementId={setSelectedStatementId}
                 />
               )}
-              {caseWorkspaceTab === 'transactions' && <TransactionsPage transactions={transactions} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} selectedCase={selectedCase} api={api} forceDetailView={true} />}
-              {caseWorkspaceTab === 'fraud' && <FraudPage detectors={detectors} runDetectors={runDetectors} loading={loading} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} forceDetailView={true} />}
+              {caseWorkspaceTab === 'transactions' && <TransactionsPage transactions={transactions} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} selectedCase={selectedCase} api={api} forceDetailView={true} selectedStatementId={selectedStatementId} />}
+              {caseWorkspaceTab === 'fraud' && <FraudPage detectors={detectors} runDetectors={runDetectors} loading={loading} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} forceDetailView={true} selectedStatementId={selectedStatementId} />}
               {caseWorkspaceTab === 'fund-flow' && <MoneyTrailPage api={api} graph={graph} transactions={transactions} selectedCase={selectedCase} caseDetail={caseDetail} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} forceDetailView={true} />}
               {caseWorkspaceTab === 'ai' && <AiPage api={api} cases={filteredCases} selectedCaseId={selectedCaseId} setSelectedCaseId={setSelectedCaseId} chat={chat} setChat={setChat} transactions={transactions} forceDetailView={true} />}
               {caseWorkspaceTab === 'reports' && <ReportsPage api={api} cases={filteredCases} selectedCaseId={selectedCaseId} selectedCase={selectedCase} setSelectedCaseId={setSelectedCaseId} forceDetailView={true} />}

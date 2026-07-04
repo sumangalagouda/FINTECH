@@ -25,17 +25,23 @@ def allowed_file(filename):
 def upload_file():
     current_user = get_jwt_identity()
     
-    if 'file' not in request.files:
+    if 'files' not in request.files and 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        
+    files = request.files.getlist('files')
+    if not files and 'file' in request.files:
+        files = [request.files['file']]
+        
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({"error": "No selected files"}), 400
         
     case_id = request.form.get('case_id')
     display_id = None
     if not case_id:
+        # Use first filename for title
+        title_filename = files[0].filename if files[0].filename else "Multiple Files"
         new_case = Case(
-            title=f"Investigation: {file.filename}",
+            title=f"Investigation: {title_filename}",
             created_by=current_user,
             assigned_to=current_user
         )
@@ -47,198 +53,206 @@ def upload_file():
         existing_case = Case.query.get(case_id)
         if existing_case:
             display_id = existing_case.display_id
-        
-    if file and allowed_file(file.filename):
-        ext = secure_filename(file.filename).rsplit('.', 1)[1].lower()
-        count = Statement.query.filter_by(case_id=case_id).count() + 1
-        
-        # Use display_id for the filename if available
-        display_str = f"case{display_id}" if display_id else case_id
-        
-        if count == 1:
-            filename = f"bank_statement_{display_str}.{ext}"
-        else:
-            filename = f"bank_statement_{display_str}_{count}.{ext}"
-            
-        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'evidence', case_id, filename)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        file.save(filepath)
-        
-        # Create Statement record
-        is_primary = False
-        existing_primary = Statement.query.filter_by(case_id=case_id, is_primary=True).first()
-        if not existing_primary:
-            is_primary = True
 
-        statement = Statement(
-            case_id=case_id,
-            filename=filename,
-            file_format=ext,
-            upload_status='processing',
-            uploaded_by=current_user,
-            is_primary=is_primary
-        )
-        db.session.add(statement)
-        
-        # Add to Evidence Locker automatically
-        from app.models.evidence_item import EvidenceItem
-        evidence = EvidenceItem(
-            case_id=case_id,
-            item_type="statement",
-            file_path=filepath,
-            uploaded_by=current_user,
-            note_text=f"Uploaded Bank Statement"
-        )
-        db.session.add(evidence)
-        db.session.commit()
-        
-        try:
-            # 1 & 2: Extract details and remove failed transactions using statement_extractor.py
-            from app.parsers.statement_extractor import extract_statement
-            
-            extracted_data = extract_statement(filepath)
-            bank_detected = extracted_data.get('account', {}).get('bank_name', 'UNKNOWN')
-            extracted_txns = extracted_data.get('transactions', [])
-            
-            # 3: Format the cleaned transactions so they can pass through the normalizer parsing logic
-            raw_txns = []
-            for t in extracted_txns:
-                raw_txns.append({
-                    "raw_text": str(t.get('description', '')),
-                    "parsed_data": {
-                        "Date": t.get('date'),
-                        "Description": str(t.get('description', '')),
-                        "Credit": t.get('credit'),
-                        "Debit": t.get('debit'),
-                        "Balance": t.get('balance'),
-                        "is_failed": t.get('is_failed', False),
-                        "failure_reason": t.get('failure_reason')
-                    }
+    display_str = f"case{display_id}" if display_id else case_id
+    successful_statements = []
+    errors = []
+
+    for file in files:
+        if file and allowed_file(file.filename):
+            try:
+                ext = secure_filename(file.filename).rsplit('.', 1)[1].lower()
+                count = Statement.query.filter_by(case_id=case_id).count() + 1
+                
+                if count == 1:
+                    filename = f"bank_statement_{display_str}.{ext}"
+                else:
+                    filename = f"bank_statement_{display_str}_{count}.{ext}"
+                    
+                filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], 'evidence', case_id, filename)
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                file.save(filepath)
+                
+                # Create Statement record
+                is_primary = False
+                existing_primary = Statement.query.filter_by(case_id=case_id, is_primary=True).first()
+                if not existing_primary:
+                    is_primary = True
+
+                statement = Statement(
+                    case_id=case_id,
+                    filename=filename,
+                    file_format=ext,
+                    upload_status='processing',
+                    uploaded_by=current_user,
+                    is_primary=is_primary
+                )
+                db.session.add(statement)
+                
+                # Add to Evidence Locker automatically
+                from app.models.evidence_item import EvidenceItem
+                evidence = EvidenceItem(
+                    case_id=case_id,
+                    item_type="statement",
+                    file_path=filepath,
+                    uploaded_by=current_user,
+                    note_text=f"Uploaded Bank Statement"
+                )
+                db.session.add(evidence)
+                db.session.commit()
+                
+                # 1 & 2: Extract details and remove failed transactions using statement_extractor.py
+                from app.parsers.statement_extractor import extract_statement
+                
+                extracted_data = extract_statement(filepath)
+                bank_detected = extracted_data.get('account', {}).get('bank_name', 'UNKNOWN')
+                extracted_txns = extracted_data.get('transactions', [])
+                
+                # 3: Format the cleaned transactions so they can pass through the normalizer parsing logic
+                raw_txns = []
+                for t in extracted_txns:
+                    raw_txns.append({
+                        "raw_text": str(t.get('description', '')),
+                        "parsed_data": {
+                            "Date": t.get('date'),
+                            "Description": str(t.get('description', '')),
+                            "Credit": t.get('credit'),
+                            "Debit": t.get('debit'),
+                            "Balance": t.get('balance'),
+                            "is_failed": t.get('is_failed', False),
+                            "failure_reason": t.get('failure_reason')
+                        }
+                    })
+                    
+                # Run normalizer (which extracts sender/receiver accounts)
+                normalized_txns = process_and_normalize(raw_txns, statement.id, case_id)
+                
+                # Save to PostgreSQL
+                # Load existing beneficiaries
+                beneficiaries_map = {}
+                from app.models.beneficiary import Beneficiary
+                for b in Beneficiary.query.filter_by(case_id=case_id).all():
+                    beneficiaries_map[b.account_number] = b
+
+                for txn_data in normalized_txns:
+                    db_data = txn_data.copy()
+                    if 'txn_id' in db_data:
+                        db_data['id'] = db_data.pop('txn_id')
+                    if 'description' in db_data and db_data['description']:
+                        db_data['description'] = str(db_data['description'])[:500]
+
+                    # Counterparty Inference for Real Statements
+                    from app.utils.entity_extractor import infer_counterparty
+                    
+                    desc = db_data.get('description', '')
+                    txn_type = db_data.get('type')
+                    counterparty = infer_counterparty(desc)
+                    
+                    if counterparty:
+                        if txn_type == 'credit':
+                            if not db_data.get('sender_account'):
+                                db_data['sender_account'] = counterparty
+                            if not db_data.get('receiver_account'):
+                                db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
+                        elif txn_type == 'debit':
+                            if not db_data.get('sender_account'):
+                                db_data['sender_account'] = 'PRIMARY_ACCOUNT'
+                            if not db_data.get('receiver_account'):
+                                db_data['receiver_account'] = counterparty
+                                
+                    # Fallback to ensure we always have PRIMARY_ACCOUNT for real CSVs without explicit accounts
+                    if txn_type == 'credit' and not db_data.get('receiver_account'):
+                        db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
+                    if txn_type == 'debit' and not db_data.get('sender_account'):
+                        db_data['sender_account'] = 'PRIMARY_ACCOUNT'
+
+                    txn = Transaction(**db_data)
+                    db.session.add(txn)
+                    
+                    # Update Beneficiaries
+                    sender = db_data.get('sender_account')
+                    receiver = db_data.get('receiver_account')
+                    amt = float(txn_data.get('amount') or 0.0)
+                    
+                    if sender:
+                        if sender not in beneficiaries_map:
+                            b = Beneficiary(case_id=case_id, account_number=sender, total_sent=0.0, total_received=0.0, transaction_count=0)
+                            db.session.add(b)
+                            beneficiaries_map[sender] = b
+                        if beneficiaries_map[sender].total_sent is None:
+                            beneficiaries_map[sender].total_sent = 0.0
+                        if beneficiaries_map[sender].transaction_count is None:
+                            beneficiaries_map[sender].transaction_count = 0
+                            
+                        beneficiaries_map[sender].total_sent += amt
+                        beneficiaries_map[sender].transaction_count += 1
+                        
+                    if receiver:
+                        if receiver not in beneficiaries_map:
+                            b = Beneficiary(case_id=case_id, account_number=receiver, total_sent=0.0, total_received=0.0, transaction_count=0)
+                            db.session.add(b)
+                            beneficiaries_map[receiver] = b
+                        if beneficiaries_map[receiver].total_received is None:
+                            beneficiaries_map[receiver].total_received = 0.0
+                        if beneficiaries_map[receiver].transaction_count is None:
+                            beneficiaries_map[receiver].transaction_count = 0
+                            
+                        beneficiaries_map[receiver].total_received += amt
+                        beneficiaries_map[receiver].transaction_count += 1
+                    
+                acc_info = extracted_data.get('account', {})
+                statement.bank_name = bank_detected
+                statement.account_number = acc_info.get('account_number')
+                statement.account_holder = acc_info.get('account_holder_name')
+                
+                import datetime
+                def parse_iso_date(d_str):
+                    if not d_str: return None
+                    try:
+                        return datetime.date.fromisoformat(d_str.split('T')[0])
+                    except Exception:
+                        return None
+                        
+                statement.statement_period_start = parse_iso_date(acc_info.get('statement_period_from'))
+                statement.statement_period_end = parse_iso_date(acc_info.get('statement_period_to'))
+
+                statement.transaction_count = len(normalized_txns)
+                statement.upload_status = 'completed'
+                db.session.commit()
+                
+                successful_statements.append({
+                    "statement_id": statement.id,
+                    "filename": statement.filename,
+                    "transactions_count": len(normalized_txns),
+                    "bank_detected": bank_detected
                 })
                 
-            # Run normalizer (which extracts sender/receiver accounts)
-            normalized_txns = process_and_normalize(raw_txns, statement.id, case_id)
-            
-            # Save to PostgreSQL
-            # Load existing beneficiaries
-            beneficiaries_map = {}
-            from app.models.beneficiary import Beneficiary
-            for b in Beneficiary.query.filter_by(case_id=case_id).all():
-                beneficiaries_map[b.account_number] = b
+            except Exception as e:
+                db.session.rollback()
+                if 'statement' in locals() and statement.id:
+                    statement.upload_status = 'failed'
+                    db.session.commit()
+                errors.append({"filename": file.filename, "error": str(e)})
 
-            for txn_data in normalized_txns:
-                db_data = txn_data.copy()
-                if 'txn_id' in db_data:
-                    db_data['id'] = db_data.pop('txn_id')
-                if 'description' in db_data and db_data['description']:
-                    db_data['description'] = str(db_data['description'])[:500]
+    if successful_statements:
+        # Run silent analysis ONCE for the entire case after all uploads
+        from app.intelligence.silent_engine import run_silent_analysis
+        run_silent_analysis(case_id)
+        
+        # Emit SocketIO event
+        socketio.emit('upload_complete', {
+            'case_id': case_id,
+            'status': 'success',
+            'statements': successful_statements
+        }, room=current_user)
 
-                # Counterparty Inference for Real Statements
-                from app.utils.entity_extractor import infer_counterparty
-                
-                desc = db_data.get('description', '')
-                txn_type = db_data.get('type')
-                counterparty = infer_counterparty(desc)
-                
-                if counterparty:
-                    if txn_type == 'credit':
-                        if not db_data.get('sender_account'):
-                            db_data['sender_account'] = counterparty
-                        if not db_data.get('receiver_account'):
-                            db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
-                    elif txn_type == 'debit':
-                        if not db_data.get('sender_account'):
-                            db_data['sender_account'] = 'PRIMARY_ACCOUNT'
-                        if not db_data.get('receiver_account'):
-                            db_data['receiver_account'] = counterparty
-                            
-                # Fallback to ensure we always have PRIMARY_ACCOUNT for real CSVs without explicit accounts
-                if txn_type == 'credit' and not db_data.get('receiver_account'):
-                    db_data['receiver_account'] = 'PRIMARY_ACCOUNT'
-                if txn_type == 'debit' and not db_data.get('sender_account'):
-                    db_data['sender_account'] = 'PRIMARY_ACCOUNT'
+    if not successful_statements and errors:
+        return jsonify({"error": "All files failed to upload", "details": errors}), 500
 
-                txn = Transaction(**db_data)
-                db.session.add(txn)
-                
-                # Update Beneficiaries
-                sender = db_data.get('sender_account')
-                receiver = db_data.get('receiver_account')
-                amt = float(txn_data.get('amount') or 0.0)
-                
-                if sender:
-                    if sender not in beneficiaries_map:
-                        b = Beneficiary(case_id=case_id, account_number=sender, total_sent=0.0, total_received=0.0, transaction_count=0)
-                        db.session.add(b)
-                        beneficiaries_map[sender] = b
-                    if beneficiaries_map[sender].total_sent is None:
-                        beneficiaries_map[sender].total_sent = 0.0
-                    if beneficiaries_map[sender].transaction_count is None:
-                        beneficiaries_map[sender].transaction_count = 0
-                        
-                    beneficiaries_map[sender].total_sent += amt
-                    beneficiaries_map[sender].transaction_count += 1
-                    
-                if receiver:
-                    if receiver not in beneficiaries_map:
-                        b = Beneficiary(case_id=case_id, account_number=receiver, total_sent=0.0, total_received=0.0, transaction_count=0)
-                        db.session.add(b)
-                        beneficiaries_map[receiver] = b
-                    if beneficiaries_map[receiver].total_received is None:
-                        beneficiaries_map[receiver].total_received = 0.0
-                    if beneficiaries_map[receiver].transaction_count is None:
-                        beneficiaries_map[receiver].transaction_count = 0
-                        
-                    beneficiaries_map[receiver].total_received += amt
-                    beneficiaries_map[receiver].transaction_count += 1
-                
-            acc_info = extracted_data.get('account', {})
-            statement.bank_name = bank_detected
-            statement.account_number = acc_info.get('account_number')
-            statement.account_holder = acc_info.get('account_holder_name')
-            
-            import datetime
-            def parse_iso_date(d_str):
-                if not d_str: return None
-                try:
-                    return datetime.date.fromisoformat(d_str.split('T')[0])
-                except Exception:
-                    return None
-                    
-            statement.statement_period_start = parse_iso_date(acc_info.get('statement_period_from'))
-            statement.statement_period_end = parse_iso_date(acc_info.get('statement_period_to'))
-
-            statement.transaction_count = len(normalized_txns)
-            statement.upload_status = 'completed'
-            db.session.commit()
-            
-            # Emit SocketIO event
-            socketio.emit('upload_complete', {
-                'statement_id': statement.id,
-                'case_id': case_id,
-                'status': 'success'
-            }, room=current_user) # Simplified room logic
-            
-            # TODO (Later): Fire Celery task asynchronously using .delay() when Celery is enabled
-            # from celery_worker import run_silent_analysis
-            # run_silent_analysis.delay(statement.id, case_id)
-            
-            # Running synchronously for now without Celery
-            from app.intelligence.silent_engine import run_silent_analysis
-            run_silent_analysis(statement.id, case_id)
-            
-            return jsonify({
-                "statement_id": statement.id,
-                "case_id": case_id,
-                "display_id": display_id,
-                "transactions_count": len(normalized_txns),
-                "bank_detected": bank_detected,
-                "status": "success"
-            }), 200
-            
-        except Exception as e:
-            statement.upload_status = 'failed'
-            db.session.commit()
-            return jsonify({"error": str(e)}), 500
-            
-    return jsonify({"error": "File type not allowed"}), 400
+    return jsonify({
+        "case_id": case_id,
+        "display_id": display_id,
+        "successful_statements": successful_statements,
+        "errors": errors,
+        "status": "success"
+    }), 200

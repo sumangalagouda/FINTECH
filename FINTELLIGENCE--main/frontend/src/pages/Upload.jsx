@@ -1,40 +1,58 @@
 import { useRef, useState } from 'react';
-import { UploadCloud, FileText } from 'lucide-react';
+import { UploadCloud, FileText, FolderPlus, FolderOpen } from 'lucide-react';
 
-export default function Upload({ api, refreshCases, selectedCaseId, setSelectedCaseId, setNotice, setActiveView, setCaseViewMode }) {
+export default function Upload({ api, cases, refreshCases, selectedCaseId, setSelectedCaseId, setNotice, setActiveView, setCaseViewMode }) {
   const inputRef = useRef(null);
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [popupMsg, setPopupMsg] = useState('');
   const [uploadedCaseId, setUploadedCaseId] = useState(null);
-  const [shouldAppend, setShouldAppend] = useState(false);
+  
+  // Two strict modes: 'new' or 'existing'
+  const [mode, setMode] = useState('new');
+  const [targetCaseId, setTargetCaseId] = useState(selectedCaseId || '');
+
+  const handleFileSelect = (event) => {
+    const selectedFiles = Array.from(event.target.files);
+    setFiles(selectedFiles);
+  };
 
   const upload = async () => {
-    if (!file) {
-      setNotice('Choose a PDF, CSV, spreadsheet, or image before analyzing.');
+    if (!files.length) {
+      setNotice('Choose at least one PDF, CSV, spreadsheet, or image before analyzing.');
       return;
     }
+    
+    if (mode === 'existing' && !targetCaseId) {
+      setNotice('Please select an existing case to append to.');
+      return;
+    }
+
     setBusy(true);
     setNotice('');
     try {
       const form = new FormData();
-      form.append('file', file);
-      if (shouldAppend && selectedCaseId) {
-        form.append('case_id', selectedCaseId);
+      files.forEach(file => {
+        form.append('files', file);
+      });
+      
+      if (mode === 'existing') {
+        form.append('case_id', targetCaseId);
       }
-      // Backend automatically generates a case if case_id is absent
+      
       const result = await api('/upload/', { method: 'POST', body: form });
       
-      // Update the case list and ensure the newly created/appended case is selected
       await refreshCases(result.case_id);
       setUploadedCaseId(result.case_id);
       
-      // Automatically redirect the user to the case summary view
       setActiveView('cases');
       setCaseViewMode('detail');
-      setPopupMsg(`Analyzed the statement succesfully and case is being created with ${result.case_id}`);
+      setPopupMsg(`Analyzed statements successfully. Case ${result.case_id.slice(0, 8)} updated.`);
       setTimeout(() => setPopupMsg(''), 5000);
       setNotice('');
+      
+      // Reset after upload
+      setFiles([]);
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -43,56 +61,94 @@ export default function Upload({ api, refreshCases, selectedCaseId, setSelectedC
   };
 
   return (
-    <section className="upload-view">
-      <p className="subcopy">PDF, CSV or Excel. We normalize into the canonical schema and run the detector suite automatically.</p>
-      <button className="dropzone" type="button" onClick={() => inputRef.current?.click()}>
-        <UploadCloud size={38} />
-        <strong>{file ? file.name : 'Drop a statement here, or click to browse'}</strong>
-        <span>PDF / CSV / XLSX / JPG / PNG</span>
+    <section className="upload-view" style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '40px' }}>
+      
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '32px' }}>
+        <button 
+          onClick={() => setMode('new')}
+          style={{
+            flex: 1, padding: '24px', borderRadius: '12px', border: mode === 'new' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+            background: mode === 'new' ? '#eff6ff' : 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: '12px'
+          }}
+        >
+          <FolderPlus size={32} color={mode === 'new' ? '#3b82f6' : '#64748b'} />
+          <strong style={{ color: mode === 'new' ? '#1e3a8a' : '#334155', fontSize: '16px' }}>Create New Case</strong>
+          <span style={{ color: '#64748b', fontSize: '13px' }}>Upload statements to start a new investigation</span>
+        </button>
+        
+        <button 
+          onClick={() => setMode('existing')}
+          style={{
+            flex: 1, padding: '24px', borderRadius: '12px', border: mode === 'existing' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+            background: mode === 'existing' ? '#eff6ff' : 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: '12px'
+          }}
+        >
+          <FolderOpen size={32} color={mode === 'existing' ? '#3b82f6' : '#64748b'} />
+          <strong style={{ color: mode === 'existing' ? '#1e3a8a' : '#334155', fontSize: '16px' }}>Add to Existing Case</strong>
+          <span style={{ color: '#64748b', fontSize: '13px' }}>Append statements to an ongoing investigation</span>
+        </button>
+      </div>
+
+      {mode === 'existing' && (
+        <div style={{ marginBottom: '32px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#334155' }}>
+            Select Target Case
+          </label>
+          <select 
+            value={targetCaseId}
+            onChange={(e) => setTargetCaseId(e.target.value)}
+            style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px' }}
+          >
+            <option value="">-- Choose a case --</option>
+            {cases.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.title} ({c.id.slice(0, 8)})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <button className="dropzone" type="button" onClick={() => inputRef.current?.click()} style={{ minHeight: '200px' }}>
+        <UploadCloud size={48} style={{ marginBottom: '16px' }} />
+        <strong>
+          {files.length > 0 
+            ? `${files.length} file(s) selected` 
+            : 'Drop statements here, or click to browse'}
+        </strong>
+        {files.length > 0 && (
+          <div style={{ marginTop: '12px', fontSize: '13px', color: '#64748b' }}>
+            {files.map(f => f.name).join(', ')}
+          </div>
+        )}
+        <span style={{ marginTop: '16px' }}>PDF / CSV / XLSX / JPG / PNG</span>
       </button>
+      
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept=".pdf,.csv,.xls,.xlsx,.png,.jpg,.jpeg"
         hidden
-        onChange={(event) => setFile(event.target.files?.[0] || null)}
+        onChange={handleFileSelect}
       />
-      <div className="upload-actions" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
-        {selectedCaseId && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#475569' }}>
-            <input 
-              type="checkbox" 
-              checked={shouldAppend} 
-              onChange={(e) => setShouldAppend(e.target.checked)}
-              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-            />
-            Append to currently selected case ({selectedCaseId.slice(0, 8)})
-          </label>
-        )}
+      
+      <div className="upload-actions" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', marginTop: '32px' }}>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          <button className="primary-button" onClick={upload} disabled={busy} type="button">
-            {busy ? 'Analyzing statement' : 'Analyze statement'}
+          <button 
+            className="primary-button" 
+            onClick={upload} 
+            disabled={busy || files.length === 0 || (mode === 'existing' && !targetCaseId)} 
+            type="button"
+            style={{ padding: '12px 32px', fontSize: '16px' }}
+          >
+            {busy ? 'Analyzing statements...' : 'Analyze statements'}
           </button>
-          {uploadedCaseId && (
-            <button 
-              className="secondary-button" 
-              onClick={() => {
-                setSelectedCaseId(uploadedCaseId);
-                setCaseViewMode('detail');
-                setActiveView('cases');
-              }} 
-              type="button"
-            >
-              View Case Summary
-            </button>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-          <span><FileText size={15} /> PDF</span>
-          <span><FileText size={15} /> Spreadsheet</span>
-          <span><FileText size={15} /> Image / scan</span>
         </div>
       </div>
+      
       {popupMsg && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255, 255, 255, 0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'white', border: '1px solid var(--success)', color: 'var(--success)', padding: '32px 48px', borderRadius: '12px', boxShadow: '0 24px 48px rgba(0,0,0,0.1)', fontWeight: '600', fontSize: '18px', textAlign: 'center', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>

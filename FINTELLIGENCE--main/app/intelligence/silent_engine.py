@@ -19,7 +19,7 @@ from app.intelligence.suspicion_score import update_case_suspicion_score
 
 intelligence_bp = Blueprint('intelligence', __name__, url_prefix='/api/intelligence')
 
-def save_detection_result(result, case_id, statement_id):
+def save_detection_result(result, case_id, account_number=None, **kwargs):
     from app.models.transaction import Transaction
     if not result:
         return
@@ -27,7 +27,8 @@ def save_detection_result(result, case_id, statement_id):
     def process_result(r):
         dr = DetectionResult(
             case_id=case_id,
-            statement_id=statement_id,
+            account_number=account_number,
+            statement_id=kwargs.get('statement_id'),
             detector_name=r.get("detector"),
             triggered=r.get("triggered", False),
             score=r.get("score", 0),
@@ -57,36 +58,21 @@ def save_detection_result(result, case_id, statement_id):
         
     db.session.commit()
 
-def run_silent_analysis(statement_id, case_id):
+def run_silent_analysis(case_id):
     """
-    Runs all detectors after upload.
+    Runs all detectors for all accounts in the case.
     """
-    results = []
-    
-    # Needs graph for M2
-    graph = get_graph_from_db(case_id)
-    
     from app.models.statement import Statement
-    primary_statement = Statement.query.get(statement_id)
-    primary_account = primary_statement.account_number if primary_statement else None
     
-    # Circular Flow
-    try:
-        cf_results = detect_circular_flow(graph, primary_account=primary_account)
-        save_detection_result(cf_results, case_id, statement_id)
-        results.extend(cf_results)
-    except Exception as e:
-        print(f"Error in CircularFlow: {e}")
-        
-    # Layering Chain
-    try:
-        lc_results = find_layering_chains(graph)
-        save_detection_result(lc_results, case_id, statement_id)
-        results.extend(lc_results)
-    except Exception as e:
-        print(f"Error in LayeringChain: {e}")
-        
-    # M3 Detectors
+    # 1. Clear previous DetectionResults for this case to avoid stale data
+    DetectionResult.query.filter_by(case_id=case_id).delete(synchronize_session=False)
+    db.session.commit()
+    
+    # 2. Get all statements in this case
+    statements = Statement.query.filter_by(case_id=case_id).all()
+    
+    all_results = []
+    
     m3_detectors = [
         detect_large_transaction,
         detect_dormant_revival,
@@ -95,39 +81,54 @@ def run_silent_analysis(statement_id, case_id):
         detect_structuring
     ]
     
-    for detector in m3_detectors:
-        try:
-            res = detector(case_id)
-            save_detection_result(res, case_id, statement_id)
-            if isinstance(res, list):
-                results.extend(res)
-            else:
-                results.append(res)
-        except Exception as e:
-            print(f"Error in {detector.__name__}: {e}")
-            
-    # M4 Detectors
     m4_detectors = [
         detect_velocity,
         detect_pass_through,
         detect_cash_cycling
     ]
     
-    for detector in m4_detectors:
-        try:
-            res = detector(case_id)
-            save_detection_result(res, case_id, statement_id)
-            if isinstance(res, list):
-                results.extend(res)
-            else:
-                results.append(res)
-        except Exception as e:
-            print(f"Error in {detector.__name__}: {e}")
-            
-    try:
-        update_case_suspicion_score(case_id, results)
+    # 3. Run STATEMENT-SCOPED detectors
+    for statement in statements:
+        stmt_results = []
+        for detector in m3_detectors + m4_detectors:
+            try:
+                res = detector(case_id, statement_id=statement.id)
+                save_detection_result(res, case_id, statement_id=statement.id)
+                if isinstance(res, list):
+                    stmt_results.extend(res)
+                elif res:
+                    stmt_results.append(res)
+            except Exception as e:
+                print(f"Error in {detector.__name__} for statement {statement.id}: {e}")
+                
+        # Calculate score for this statement
+        score_data = update_case_suspicion_score(case_id, stmt_results, statement_id=statement.id)
+        statement.suspicion_score = score_data.get("risk_score", 0)
+        statement.severity = score_data.get("risk_level", "low").lower()
+        statement.risk_level = score_data.get("risk_level", "low")
+        all_results.extend(stmt_results)
         
-        # Fire AI Summary Generation asynchronously
+    db.session.commit()
+        
+    # 5. Run CASE-SCOPED Graph Intelligence
+    graph = get_graph_from_db(case_id)
+    
+    try:
+        cf_results = detect_circular_flow(graph)
+        save_detection_result(cf_results, case_id, account_number=None)
+        all_results.extend(cf_results)
+    except Exception as e:
+        print(f"Error in CircularFlow: {e}")
+        
+    try:
+        lc_results = find_layering_chains(graph)
+        save_detection_result(lc_results, case_id, account_number=None)
+        all_results.extend(lc_results)
+    except Exception as e:
+        print(f"Error in LayeringChain: {e}")
+        
+    # Optional AI Summary
+    try:
         import threading
         from app.routes.cases import generate_ai_summary_for_case
         from flask import current_app
@@ -139,20 +140,19 @@ def run_silent_analysis(statement_id, case_id):
                 
         threading.Thread(target=bg_generate, daemon=True).start()
     except Exception as e:
-        print(f"Error updating score or triggering AI summary: {e}")
+        print(f"Error triggering AI summary: {e}")
         
-    return results
+    return all_results
 
 @intelligence_bp.route('/run-silent', methods=['POST'])
 @jwt_required()
 def run_silent_endpoint():
     data = request.get_json(silent=True) or {}
-    statement_id = data.get('statement_id')
     case_id = data.get('case_id')
-    if not statement_id or not case_id:
-        return jsonify({"error": "statement_id and case_id are required"}), 400
+    if not case_id:
+        return jsonify({"error": "case_id is required"}), 400
         
-    results = run_silent_analysis(statement_id, case_id)
+    results = run_silent_analysis(case_id)
     return jsonify({"status": "success", "detectors_run": len(results)})
 
 @intelligence_bp.route('/fifo-trace', methods=['POST'])

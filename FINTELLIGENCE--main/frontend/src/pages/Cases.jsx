@@ -50,7 +50,9 @@ export default function Cases({
   viewMode,
   setViewMode,
   refreshCases,
-  setCaseDetail
+  setCaseDetail,
+  selectedStatementId,
+  setSelectedStatementId
 }) {
   const [note, setNote] = useState('');
   const [message, setMessage] = useState('');
@@ -314,8 +316,13 @@ export default function Cases({
     }
   };
 
-  const confidence = Math.min(100, Math.max(50, 60 + Math.round(caseDetail?.suspicion_score || 0)));
-  const evidenceScore = Math.min(100, Math.max(40, 50 + Math.round((caseDetail?.suspicion_score || 0) * 0.5)));
+  const activeStatement = useMemo(() => {
+    if (!caseDetail || !caseDetail.statements) return null;
+    return caseDetail.statements.find(s => s.id === selectedStatementId) || caseDetail.statements[0];
+  }, [caseDetail, selectedStatementId]);
+
+  const confidence = Math.min(100, Math.max(50, 60 + Math.round(activeStatement?.suspicion_score || 0)));
+  const evidenceScore = Math.min(100, Math.max(40, 50 + Math.round((activeStatement?.suspicion_score || 0) * 0.5)));
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val || 0);
 
@@ -344,22 +351,21 @@ export default function Cases({
                 <h1>{caseDetail.title || `Investigation: ${caseDetail.id.slice(0, 8)}`}</h1>
                 <div className="case-statements-list" style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {caseDetail.statements?.map(stmt => (
-                    <div key={stmt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      <FileText size={16} color="#64748b" />
-                      <span style={{ fontSize: '14px', fontWeight: 500, color: '#334155' }}>{stmt.filename}</span>
-                      {stmt.is_primary ? (
-                        <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>PRIMARY</span>
-                      ) : (
-                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>EVIDENCE</span>
-                      )}
-                      {!stmt.is_primary && !isSIO && (
-                        <button 
-                          onClick={() => handleSetPrimary(stmt.id)}
-                          style={{ marginLeft: 'auto', fontSize: '12px', background: 'white', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
-                        >
-                          Set as Primary
-                        </button>
-                      )}
+                    <div 
+                      key={stmt.id} 
+                      onClick={() => setSelectedStatementId(stmt.id)}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '12px', 
+                        background: selectedStatementId === stmt.id ? '#e0e7ff' : '#f8fafc', 
+                        padding: '8px 12px', 
+                        borderRadius: '6px', 
+                        border: selectedStatementId === stmt.id ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+                        cursor: 'pointer' 
+                      }}>
+                      <FileText size={16} color={selectedStatementId === stmt.id ? "#4f46e5" : "#64748b"} />
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: selectedStatementId === stmt.id ? '#4f46e5' : '#334155' }}>{stmt.filename}</span>
                     </div>
                   ))}
                   {(!caseDetail.statements || caseDetail.statements.length === 0) && (
@@ -610,31 +616,55 @@ export default function Cases({
               </div>
             </div>
 
-            <div className="metric-grid four case-summary-metrics">
-              <div className="metric">
-                <span>SEVERITY</span>
-                <div className="metric-badge"><Badge value={caseDetail.severity || 'low'} /></div>
+            {caseDetail.account_scores && Object.keys(caseDetail.account_scores).length > 0 ? (
+              <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px', fontWeight: '600' }}>ACCOUNT-LEVEL SUSPICION SCORES</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+                  {Object.entries(caseDetail.account_scores).map(([acc, score]) => (
+                    <div key={acc} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Account {acc}</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: score > 70 ? '#ef4444' : score > 40 ? '#f59e0b' : '#10b981' }}>
+                        {Math.round(score)}
+                      </div>
+                    </div>
+                  ))}
+                  {caseDetail.suspicion_score !== undefined && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Case Overall (Graph)</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: '#334155' }}>
+                        {Math.round(caseDetail.suspicion_score)}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="metric">
-                <span>SUSPICION</span>
-                <strong>{Math.round(caseDetail.suspicion_score || 0)}</strong>
+            ) : (
+              <div className="metric-grid four case-summary-metrics">
+                <div className="metric">
+                  <span>SEVERITY</span>
+                  <div className="metric-badge"><Badge value={activeStatement?.severity || 'low'} /></div>
+                </div>
+                <div className="metric">
+                  <span>SUSPICION</span>
+                  <strong>{Math.round(activeStatement?.suspicion_score || 0)}</strong>
+                </div>
+                <div className="metric">
+                  <span>CONFIDENCE</span>
+                  <strong>{confidence}%</strong>
+                </div>
+                <div className="metric">
+                  <span>EVIDENCE</span>
+                  <strong>{evidenceScore}%</strong>
+                </div>
               </div>
-              <div className="metric">
-                <span>CONFIDENCE</span>
-                <strong>{confidence}%</strong>
-              </div>
-              <div className="metric">
-                <span>EVIDENCE</span>
-                <strong>{evidenceScore}%</strong>
-              </div>
-            </div>
+            )}
 
             <div className="panel ai-summary-panel">
               <h3 className="panel-title">AI INVESTIGATION SUMMARY</h3>
               <div className="ai-summary-content">
-                {caseDetail.ai_summary ? (
+                {activeStatement?.ai_summary ? (
                   <div className="markdown-body" style={{ fontSize: '13px', lineHeight: '1.5' }}>
-                    <ReactMarkdown>{caseDetail.ai_summary}</ReactMarkdown>
+                    <ReactMarkdown>{activeStatement.ai_summary}</ReactMarkdown>
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '20px' }}>

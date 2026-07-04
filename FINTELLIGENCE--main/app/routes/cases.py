@@ -36,6 +36,7 @@ def get_cases():
         "status": c.status,
         "severity": c.severity,
         "risk_level": c.risk_level,
+        "account_scores": c.account_scores,
         "created_at": c.created_at.isoformat()
     } for c in cases]), 200
 
@@ -95,6 +96,7 @@ def get_case_detail(case_id):
         "severity": c.severity,
         "risk_level": c.risk_level,
         "suspicion_score": c.suspicion_score,
+        "account_scores": c.account_scores,
         "ai_summary": c.ai_summary,
         "account_holder": account_holder,
         "account_number": account_number,
@@ -103,7 +105,15 @@ def get_case_detail(case_id):
         "statement_period": statement_period,
         "total_debited": total_debited,
         "total_credited": total_credited,
-        "statements": [{"id": s.id, "filename": s.filename, "status": s.upload_status} for s in c.statements]
+        "statements": [{
+            "id": s.id, 
+            "filename": s.filename, 
+            "status": s.upload_status,
+            "suspicion_score": s.suspicion_score,
+            "severity": s.severity,
+            "risk_level": s.risk_level,
+            "ai_summary": s.ai_summary
+        } for s in c.statements]
     }), 200
 
 

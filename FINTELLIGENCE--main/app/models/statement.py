@@ -18,6 +18,11 @@ class Statement(db.Model):
     uploaded_by = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     transaction_count = db.Column(db.Integer, default=0)
     is_primary = db.Column(db.Boolean, nullable=False, default=False)
+    
+    suspicion_score = db.Column(db.Float, default=0.0)
+    risk_level = db.Column(db.String(50), default='low') # low/medium/high/critical
+    severity = db.Column(db.String(50), default='low') # low/medium/high/critical
+    ai_summary = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

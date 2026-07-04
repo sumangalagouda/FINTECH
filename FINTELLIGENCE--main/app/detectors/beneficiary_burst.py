@@ -171,15 +171,18 @@ def extract_beneficiary(receiver_account, description):
 # DETECTOR
 # ============================================================================
 
-def detect_beneficiary_burst(case_id: str):
+def detect_beneficiary_burst(case_id: str, statement_id: str = None):
 
-    transactions = (
+    query = (
         Transaction.query
         .join(Statement)
-        .filter(Transaction.case_id == case_id, Transaction.is_failed == False, Statement.is_primary == True)
-        .order_by(Transaction.date)
-        .all()
+        .filter(Transaction.case_id == case_id, Transaction.is_failed == False)
     )
+    
+    if statement_id:
+        query = query.filter(Transaction.statement_id == statement_id)
+
+    transactions = query.order_by(Transaction.date).all()
 
     if not transactions:
         return [{

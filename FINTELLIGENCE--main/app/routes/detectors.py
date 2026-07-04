@@ -14,9 +14,10 @@ detectors_bp = Blueprint('detectors', __name__, url_prefix='/api/detect')
 def large_transaction_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_large_transaction(case_id)
+    results = detect_large_transaction(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/dormant-revival', methods=['POST'])
@@ -24,9 +25,10 @@ def large_transaction_endpoint():
 def dormant_revival_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_dormant_revival(case_id)
+    results = detect_dormant_revival(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/beneficiary-burst', methods=['POST'])
@@ -34,9 +36,10 @@ def dormant_revival_endpoint():
 def beneficiary_burst_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_beneficiary_burst(case_id)
+    results = detect_beneficiary_burst(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/high-risk-time', methods=['POST'])
@@ -44,9 +47,10 @@ def beneficiary_burst_endpoint():
 def high_risk_time_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_high_risk_time(case_id)
+    results = detect_high_risk_time(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/structuring', methods=['POST'])
@@ -54,9 +58,10 @@ def high_risk_time_endpoint():
 def structuring_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_structuring(case_id)
+    results = detect_structuring(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/evidence-confidence', methods=['POST'])
@@ -64,6 +69,7 @@ def structuring_endpoint():
 def evidence_confidence_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
     results = calculate_evidence_confidence(case_id)
@@ -75,9 +81,10 @@ def pass_through_endpoint():
     from app.detectors.pass_through import detect_pass_through
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_pass_through(case_id)
+    results = detect_pass_through(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/velocity', methods=['POST'])
@@ -86,9 +93,10 @@ def velocity_endpoint():
     from app.detectors.velocity import detect_velocity
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_velocity(case_id)
+    results = detect_velocity(case_id, statement_id=statement_id)
     return jsonify(results)
 
 @detectors_bp.route('/cash-cycling', methods=['POST'])
@@ -97,7 +105,8 @@ def cash_cycling_endpoint():
     from app.detectors.cash_cycling import detect_cash_cycling
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    statement_id = data.get('statement_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
-    results = detect_cash_cycling(case_id)
+    results = detect_cash_cycling(case_id, statement_id=statement_id)
     return jsonify(results)

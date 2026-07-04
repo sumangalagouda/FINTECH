@@ -8,7 +8,8 @@ class DetectionResult(db.Model):
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     case_id = db.Column(db.String(36), db.ForeignKey('cases.id'), nullable=False)
-    statement_id = db.Column(db.String(36), db.ForeignKey('statements.id'), nullable=False)
+    account_number = db.Column(db.String(255), nullable=True) # Now tracking by account
+    statement_id = db.Column(db.String(36), db.ForeignKey('statements.id'), nullable=True)
     txn_id = db.Column(db.String(36), db.ForeignKey('transactions.id'), nullable=True)
     detector_name = db.Column(db.String(100), nullable=False)
     triggered = db.Column(db.Boolean, default=False)

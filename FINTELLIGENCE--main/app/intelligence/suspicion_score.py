@@ -21,9 +21,12 @@ WEIGHTS = {
     "HighRiskTime": 8
 }
 
-def update_case_suspicion_score(case_id, results=None):
-    # This is called during silent engine to just update, but we can also just fetch from DB
-    results_db = DetectionResult.query.filter_by(case_id=case_id, triggered=True).all()
+def update_case_suspicion_score(case_id, results=None, statement_id=None):
+    # If statement_id is provided, filter by it. Otherwise get all.
+    query = DetectionResult.query.filter_by(case_id=case_id, triggered=True)
+    if statement_id:
+        query = query.filter_by(statement_id=statement_id)
+    results_db = query.all()
     
     # We want unique detectors in case they triggered multiple times
     # We'll take the highest score for each detector
@@ -78,12 +81,13 @@ def update_case_suspicion_score(case_id, results=None):
         txns = Transaction.query.filter(Transaction.id.in_(list(txn_ids))).all()
         flagged_amount = sum(t.amount for t in txns)
         
-    # Update case
-    case = Case.query.get(case_id)
-    if case:
-        case.suspicion_score = final_score
-        case.risk_level = risk_level
-        db.session.commit()
+    # Update case ONLY if we are calculating for the entire case (statement_id=None)
+    if statement_id is None:
+        case = Case.query.get(case_id)
+        if case:
+            case.suspicion_score = final_score
+            case.risk_level = risk_level
+            db.session.commit()
         
     return {
         "risk_score": round(final_score, 1),
