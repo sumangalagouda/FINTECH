@@ -65,12 +65,18 @@ def upload_file():
         file.save(filepath)
         
         # Create Statement record
+        is_primary = False
+        existing_primary = Statement.query.filter_by(case_id=case_id, is_primary=True).first()
+        if not existing_primary:
+            is_primary = True
+
         statement = Statement(
             case_id=case_id,
             filename=filename,
             file_format=ext,
             upload_status='processing',
-            uploaded_by=current_user
+            uploaded_by=current_user,
+            is_primary=is_primary
         )
         db.session.add(statement)
         

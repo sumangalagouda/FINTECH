@@ -66,9 +66,13 @@ def run_silent_analysis(statement_id, case_id):
     # Needs graph for M2
     graph = get_graph_from_db(case_id)
     
+    from app.models.statement import Statement
+    primary_statement = Statement.query.get(statement_id)
+    primary_account = primary_statement.account_number if primary_statement else None
+    
     # Circular Flow
     try:
-        cf_results = detect_circular_flow(graph)
+        cf_results = detect_circular_flow(graph, primary_account=primary_account)
         save_detection_result(cf_results, case_id, statement_id)
         results.extend(cf_results)
     except Exception as e:

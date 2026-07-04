@@ -17,6 +17,7 @@ class Statement(db.Model):
     upload_status = db.Column(db.String(50), default='processing') # processing/completed/failed
     uploaded_by = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     transaction_count = db.Column(db.Integer, default=0)
+    is_primary = db.Column(db.Boolean, nullable=False, default=False)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

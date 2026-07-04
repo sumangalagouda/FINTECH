@@ -7,6 +7,7 @@ export default function Upload({ api, refreshCases, selectedCaseId, setSelectedC
   const [busy, setBusy] = useState(false);
   const [popupMsg, setPopupMsg] = useState('');
   const [uploadedCaseId, setUploadedCaseId] = useState(null);
+  const [shouldAppend, setShouldAppend] = useState(false);
 
   const upload = async () => {
     if (!file) {
@@ -18,11 +19,19 @@ export default function Upload({ api, refreshCases, selectedCaseId, setSelectedC
     try {
       const form = new FormData();
       form.append('file', file);
+      if (shouldAppend && selectedCaseId) {
+        form.append('case_id', selectedCaseId);
+      }
       // Backend automatically generates a case if case_id is absent
       const result = await api('/upload/', { method: 'POST', body: form });
-      setSelectedCaseId(result.case_id);
-      await refreshCases();
+      
+      // Update the case list and ensure the newly created/appended case is selected
+      await refreshCases(result.case_id);
       setUploadedCaseId(result.case_id);
+      
+      // Automatically redirect the user to the case summary view
+      setActiveView('cases');
+      setCaseViewMode('detail');
       setPopupMsg(`Analyzed the statement succesfully and case is being created with ${result.case_id}`);
       setTimeout(() => setPopupMsg(''), 5000);
       setNotice('');
@@ -48,27 +57,41 @@ export default function Upload({ api, refreshCases, selectedCaseId, setSelectedC
         hidden
         onChange={(event) => setFile(event.target.files?.[0] || null)}
       />
-      <div className="upload-actions">
-        <button className="primary-button" onClick={upload} disabled={busy} type="button">
-          {busy ? 'Analyzing statement' : 'Analyze statement'}
-        </button>
-        {uploadedCaseId && (
-          <button 
-            className="secondary-button" 
-            onClick={() => {
-              setSelectedCaseId(uploadedCaseId);
-              setCaseViewMode('detail');
-              setActiveView('cases');
-            }} 
-            type="button"
-            style={{ marginLeft: '12px' }}
-          >
-            View Case Summary
-          </button>
+      <div className="upload-actions" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+        {selectedCaseId && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#475569' }}>
+            <input 
+              type="checkbox" 
+              checked={shouldAppend} 
+              onChange={(e) => setShouldAppend(e.target.checked)}
+              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+            />
+            Append to currently selected case ({selectedCaseId.slice(0, 8)})
+          </label>
         )}
-        <span><FileText size={15} /> PDF</span>
-        <span><FileText size={15} /> Spreadsheet</span>
-        <span><FileText size={15} /> Image / scan</span>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <button className="primary-button" onClick={upload} disabled={busy} type="button">
+            {busy ? 'Analyzing statement' : 'Analyze statement'}
+          </button>
+          {uploadedCaseId && (
+            <button 
+              className="secondary-button" 
+              onClick={() => {
+                setSelectedCaseId(uploadedCaseId);
+                setCaseViewMode('detail');
+                setActiveView('cases');
+              }} 
+              type="button"
+            >
+              View Case Summary
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+          <span><FileText size={15} /> PDF</span>
+          <span><FileText size={15} /> Spreadsheet</span>
+          <span><FileText size={15} /> Image / scan</span>
+        </div>
       </div>
       {popupMsg && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255, 255, 255, 0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

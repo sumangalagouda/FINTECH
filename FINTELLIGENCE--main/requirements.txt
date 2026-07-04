@@ -33,3 +33,5 @@ reportlab==4.0.7
 weasyprint==60.2
 jinja2==3.1.2
 python-docx==1.1.0
+rapidfuzz==3.14.3
+holidays==0.63

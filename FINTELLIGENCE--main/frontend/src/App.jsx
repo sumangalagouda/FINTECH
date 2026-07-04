@@ -89,14 +89,18 @@ export default function App() {
     return cases.filter((c) => c.status === caseFilter);
   }, [cases, caseFilter]);
 
-  const refreshCases = useCallback(async () => {
+  const refreshCases = useCallback(async (forceSelectedId) => {
     const [data, overviewData] = await Promise.all([
       listCases(api),
       getDashboardOverview(api).catch(() => null)
     ]);
     setCases(data);
     if (overviewData) setOverview(overviewData);
-    setSelectedCaseId((current) => (data.some((item) => item.id === current) ? current : data[0]?.id || ''));
+    if (forceSelectedId && typeof forceSelectedId === 'string') {
+      setSelectedCaseId(forceSelectedId);
+    } else {
+      setSelectedCaseId((current) => (data.some((item) => item.id === current) ? current : data[0]?.id || ''));
+    }
     return data;
   }, [api]);
 

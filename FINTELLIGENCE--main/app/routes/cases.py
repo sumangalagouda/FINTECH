@@ -306,3 +306,68 @@ def update_case_status(case_id):
     db.session.commit()
     
     return jsonify({"msg": "Status updated"}), 200
+
+@cases_bp.route('/<case_id>/statements/<statement_id>/set-primary', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def set_primary_statement(case_id, statement_id):
+    current_user_id = get_jwt_identity()
+    
+    # 1. Fetch statement
+    target_statement = Statement.query.get_or_404(statement_id)
+    
+    # 3. Verify it belongs to requested case
+    if target_statement.case_id != case_id:
+        return jsonify({"error": "Statement does not belong to this case"}), 400
+        
+    # If already primary, do nothing
+    if target_statement.is_primary:
+        return jsonify({"msg": "Already primary statement"}), 200
+        
+    try:
+        # 5. Set all statements in case to is_primary=False
+        Statement.query.filter_by(case_id=case_id).update({"is_primary": False})
+        
+        # 6. Set selected to is_primary=True
+        target_statement.is_primary = True
+        
+        # 7. Delete previous detection results for primary-scoped detectors
+        from app.models.detection_result import DetectionResult
+        primary_detectors = [
+            'LargeTransaction', 'TransactionVelocity', 'PassThrough',
+            'Structuring', 'DormantRevival', 'CashCycling', 
+            'HighRiskTime', 'BeneficiaryBurst'
+        ]
+        DetectionResult.query.filter(
+            DetectionResult.case_id == case_id,
+            DetectionResult.detector_name.in_(primary_detectors)
+        ).delete(synchronize_session=False)
+        
+        # Also clear the suspicion score temporarily
+        case = Case.query.get(case_id)
+        if case:
+            case.suspicion_score = 0.0
+            
+        # Add audit trail
+        audit = AuditTrail(
+            case_id=case_id,
+            action="PRIMARY_STATEMENT_CHANGE",
+            performed_by=current_user_id,
+            old_value={"primary_statement_id": None}, # Could fetch old if needed
+            new_value={"primary_statement_id": statement_id},
+            ip_address=request.remote_addr
+        )
+        db.session.add(audit)
+        
+        # Commit atomically
+        db.session.commit()
+        
+        # Re-run silent analysis on the new primary statement
+        from app.intelligence.silent_engine import run_silent_analysis
+        run_silent_analysis(statement_id, case_id)
+        
+        return jsonify({"msg": "Primary statement updated successfully"}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

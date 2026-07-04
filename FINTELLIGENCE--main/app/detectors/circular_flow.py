@@ -112,7 +112,7 @@ FAST_CYCLE_DAYS = 7
 # DETECTOR
 # ============================================================================
 
-def detect_circular_flow(graph: nx.MultiDiGraph):
+def detect_circular_flow(graph: nx.MultiDiGraph, primary_account: str = None):
 
     results = []
 
@@ -289,6 +289,13 @@ def detect_circular_flow(graph: nx.MultiDiGraph):
             " → ".join(cycle)
             + f" → {cycle[0]}"
         )
+        
+        triggered = True
+        is_cross_account = True # Assuming all cycles with > 1 node are cross-account
+        if primary_account and primary_account not in cycle:
+            triggered = False
+            score = 0
+            severity = "info"
 
         # --------------------------------------------------------------------
         # OUTPUT
@@ -298,7 +305,7 @@ def detect_circular_flow(graph: nx.MultiDiGraph):
 
             "detector": "CircularFlow",
 
-            "triggered": True,
+            "triggered": triggered,
 
             "score": score,
 
@@ -330,7 +337,13 @@ def detect_circular_flow(graph: nx.MultiDiGraph):
                     time_span_days,
 
                 "all_accounts_new":
-                    all_new
+                    all_new,
+                    
+                "is_cross_account":
+                    is_cross_account,
+                    
+                "primary_connected":
+                    primary_account in cycle if primary_account else True
             }
         })
 

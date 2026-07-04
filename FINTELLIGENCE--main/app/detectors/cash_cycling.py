@@ -89,6 +89,7 @@
 
 import pandas as pd
 from app.models.transaction import Transaction
+from app.models.statement import Statement
 
 
 # ============================================================================
@@ -138,7 +139,8 @@ def detect_cash_cycling(case_id: str):
 
     transactions = (
         Transaction.query
-        .filter_by(case_id=case_id, is_failed=False)
+        .join(Statement)
+        .filter(Transaction.case_id == case_id, Transaction.is_failed == False, Statement.is_primary == True)
         .order_by(Transaction.date)
         .all()
     )

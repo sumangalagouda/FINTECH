@@ -114,6 +114,19 @@ export default function Cases({
     }
   }, [viewMode, selectedCaseId]);
 
+  const handleSetPrimary = async (statementId) => {
+    if (!selectedCaseId) return;
+    try {
+      await api(`/cases/${selectedCaseId}/statements/${statementId}/set-primary`, { method: 'POST' });
+      if (refreshCases) refreshCases();
+      // To trigger a re-render of caseDetail, it relies on refreshCases which usually updates the selected case if implemented well.
+      // Or we can manually trigger a reload here if api returns the updated case.
+      alert('Primary statement updated. The AI is re-analyzing the case in the background.');
+    } catch (err) {
+      alert(err.message || 'Error setting primary statement');
+    }
+  };
+
   const addNote = async () => {
     if (!note.trim() || !selectedCaseId) return;
     try {
@@ -329,13 +342,28 @@ export default function Cases({
               <div className="case-title-block">
                 <span className="eyebrow">CASE - {String(caseDetail.display_id || '').padStart(8, '0')}</span>
                 <h1>{caseDetail.title || `Investigation: ${caseDetail.id.slice(0, 8)}`}</h1>
-                <div className="case-meta-row muted">
-                  <span>{caseDetail.statements?.[0]?.filename || 'No statement'}</span>
-                  {caseDetail.statement_period && caseDetail.statement_period !== 'Unknown' && (
-                    <>
-                      <span className="separator">&bull;</span>
-                      <span>{caseDetail.statement_period}</span>
-                    </>
+                <div className="case-statements-list" style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {caseDetail.statements?.map(stmt => (
+                    <div key={stmt.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <FileText size={16} color="#64748b" />
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: '#334155' }}>{stmt.filename}</span>
+                      {stmt.is_primary ? (
+                        <span style={{ background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>PRIMARY</span>
+                      ) : (
+                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>EVIDENCE</span>
+                      )}
+                      {!stmt.is_primary && !isSIO && (
+                        <button 
+                          onClick={() => handleSetPrimary(stmt.id)}
+                          style={{ marginLeft: 'auto', fontSize: '12px', background: 'white', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          Set as Primary
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {(!caseDetail.statements || caseDetail.statements.length === 0) && (
+                    <span className="muted">No statements attached</span>
                   )}
                 </div>
               </div>
@@ -666,7 +694,14 @@ export default function Cases({
                   detectors.filter(d => d.triggered).map((det, i) => (
                     <div className="detector-list-item" key={i}>
                       <div className="detector-info">
-                        <strong>{det.name}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong>{det.name}</strong>
+                          {det.metadata?.is_cross_account && (
+                            <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                              CROSS-ACCOUNT
+                            </span>
+                          )}
+                        </div>
                         <span className="muted">{det.reason || 'Flagged transactions detected'}</span>
                       </div>
                       <Badge value={det.severity} />

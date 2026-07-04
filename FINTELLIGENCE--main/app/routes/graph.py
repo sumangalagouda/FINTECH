@@ -87,7 +87,12 @@ def detect_circular_flow_endpoint():
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
     G = get_graph_from_db(case_id)
-    results = detect_circular_flow(G)
+    
+    from app.models.statement import Statement
+    primary_statement = Statement.query.filter_by(case_id=case_id, is_primary=True).first()
+    primary_account = primary_statement.account_number if primary_statement else None
+    
+    results = detect_circular_flow(G, primary_account=primary_account)
     return jsonify(results)
 
 @graph_bp.route('/detect/layering-chain', methods=['POST'])

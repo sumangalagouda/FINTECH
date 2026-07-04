@@ -32,6 +32,11 @@ export default function DetectorCard({ item }) {
               <AlertTriangle size={18} color="#ef4444" />
             ) : null}
             <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{item.name}</strong>
+            {item.metadata?.is_cross_account && (
+              <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                CROSS-ACCOUNT
+              </span>
+            )}
             {isExpanded ? <ChevronUp size={18} color="#94a3b8" /> : <ChevronDown size={18} color="#94a3b8" />}
           </div>
           <p style={{ color: '#475569', marginTop: '6px', fontSize: '0.95rem', lineHeight: '1.4' }}>
