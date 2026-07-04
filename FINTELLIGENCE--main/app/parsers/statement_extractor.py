@@ -131,10 +131,14 @@ def _parse_amount(val) -> Optional[float]:
         return None
 
 
-def _parse_date(s: Optional[str]) -> Optional[str]:
-    if not s:
+def _parse_date(s) -> Optional[str]:
+    import pandas as pd
+    from datetime import datetime, date
+    if pd.isna(s) or s is None:
         return None
-    s = str(s).strip()
+    if isinstance(s, (datetime, date)):
+        return s.strftime('%Y-%m-%d')
+    s = str(s).strip().replace('\n', ' ')
     if not s:
         return None
     try:
@@ -219,19 +223,22 @@ def _dataframe_from_pdf(path: str) -> pd.DataFrame:
                     [str(h).lower() if h else '' for h in header_row]
                 )
 
-                is_txn_header = any(
-                    k in header_low
-                    for k in ['date', 'value date', 'description',
-                               'narration', 'withdrawal', 'deposit',
-                               'debit', 'credit', 'balance']
-                )
+                has_date = any(k in header_low for k in ['date', 'value date', 'txn date'])
+                has_amount = any(k in header_low for k in ['withdrawal', 'deposit', 'debit', 'credit', 'balance', 'amount'])
+                
+                is_txn_header = has_date and has_amount
 
                 if is_txn_header:
-                    # First or repeated header page
-                    if header_cols is None:
+                    # Update header_cols to the most comprehensive header
+                    if header_cols is None or len(header_row) > len(header_cols):
                         header_cols = header_row
+                        # Filter existing rows to only keep those that match the new length
+                        all_rows = [r for r in all_rows if len(r) == len(header_cols)]
+                        
                     # Add data rows (skip header row itself)
-                    all_rows.extend(table[1:])
+                    for row in table[1:]:
+                        if len(row) == len(header_cols):
+                            all_rows.append(row)
                 elif header_cols is not None:
                     # Continuation page — no header, same column count
                     if len(table[0]) == len(header_cols):

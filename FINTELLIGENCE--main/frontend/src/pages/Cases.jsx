@@ -609,23 +609,23 @@ export default function Cases({
             <div className="extracted-metadata-bar">
               <div className="meta-item">
                 <span className="meta-label">Account Holder</span>
-                <span className="meta-value">{activeStatement?.account_holder || caseDetail.account_holder || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.account_holder || (caseDetail.statements.length === 1 ? caseDetail.account_holder : 'Unknown')}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Account Number</span>
-                <span className="meta-value">{activeStatement?.account_number || caseDetail.account_number || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.account_number || (caseDetail.statements.length === 1 ? caseDetail.account_number : 'Unknown')}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Bank & Branch</span>
-                <span className="meta-value">{activeStatement?.bank_name || caseDetail.bank_name || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.bank_name || (caseDetail.statements.length === 1 ? caseDetail.bank_name : 'Unknown')}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Total Debits</span>
-                <span className="meta-value error-text">{formatCurrency(caseDetail.total_debited)}</span>
+                <span className="meta-value error-text">{formatCurrency(activeStatement?.total_debited ?? caseDetail.total_debited)}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Total Credits</span>
-                <span className="meta-value success-text">{formatCurrency(caseDetail.total_credited)}</span>
+                <span className="meta-value success-text">{formatCurrency(activeStatement?.total_credited ?? caseDetail.total_credited)}</span>
               </div>
             </div>
 

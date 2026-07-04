@@ -259,9 +259,14 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
                     nodes[node_id]["last_seen"] = txn_date
 
         # --------------------------------------------------------------
-        # EDGE ATTRIBUTES
+        # EDGE ATTRIBUTES & RISK PROPAGATION
         # --------------------------------------------------------------
         is_suspicious = amount >= 500000
+        
+        # Simple heuristic risk for nodes based on transaction volume/suspicion
+        risk_increment = 25.0 if is_suspicious else min(20.0, (amount / 50000.0) * 5.0)
+        nodes[u]["risk_score"] = min(95.0, nodes[u]["risk_score"] + risk_increment)
+        nodes[v]["risk_score"] = min(95.0, nodes[v]["risk_score"] + risk_increment)
 
         G.add_edge(
             u,
@@ -325,6 +330,18 @@ def build_multi_statement_graph(
         )
         .all()
     )
+    from app.models.case import Case
+    case_obj = Case.query.get(case_id)
+    
+    # Extract statement scores
+    statement_scores = {}
+    if case_obj:
+        for s in case_obj.statements:
+            if s.account_number:
+                statement_scores[s.account_number] = s.suspicion_score
+            elif s.id:
+                statement_scores[f"STATEMENT_{s.id}"] = s.suspicion_score
+
     print("\n===== GRAPH DEBUG =====")
 
     for t in Transaction.query.filter_by(case_id=case_id).limit(10):
@@ -335,7 +352,15 @@ def build_multi_statement_graph(
             t.description
         )
     print("=======================\n")
-    return build_graph(transactions)
+    
+    G = build_graph(transactions)
+    
+    for node_id in G.nodes:
+        # Give exact statement score to primary nodes
+        if node_id in statement_scores:
+            G.nodes[node_id]["risk_score"] = statement_scores[node_id]
+            
+    return G
 
 
 # ============================================================================

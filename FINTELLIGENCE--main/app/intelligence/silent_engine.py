@@ -142,8 +142,12 @@ def run_silent_analysis(case_id):
     except Exception as e:
         print(f"Error triggering AI summary: {e}")
         
+    try:
+        update_case_suspicion_score(case_id, statement_id=None)
+    except Exception as e:
+        print(f"Error updating overall case suspicion score: {e}")
+        
     return all_results
-
 @intelligence_bp.route('/run-silent', methods=['POST'])
 @jwt_required()
 def run_silent_endpoint():

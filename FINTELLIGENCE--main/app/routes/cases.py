@@ -9,10 +9,40 @@ from app.models.beneficiary import Beneficiary
 from app.models.audit_trail import AuditTrail
 from app.models.user import User
 from app.models.evidence_item import EvidenceItem
+from app.models.detection_result import DetectionResult
 from werkzeug.security import check_password_hash
 from app.extensions import db, limiter
 
 cases_bp = Blueprint('cases', __name__)
+
+@cases_bp.route('/debug-stats', methods=['GET'])
+def debug_stats():
+    c = Case.query.order_by(Case.created_at.desc()).first()
+    if not c: return jsonify({"error": "No cases"})
+    
+    statements = Statement.query.filter_by(case_id=c.id).all()
+    stmts_data = []
+    for s in statements:
+        txns = Transaction.query.filter_by(statement_id=s.id).all()
+        debits = sum(t.amount for t in txns if t.type == 'debit')
+        credits = sum(t.amount for t in txns if t.type == 'credit')
+        stmts_data.append({
+            "filename": s.filename,
+            "txns": len(txns),
+            "debits": debits,
+            "credits": credits,
+            "score": s.suspicion_score
+        })
+        
+    results = DetectionResult.query.filter_by(case_id=c.id).all()
+    res_data = [{"stmt": r.statement_id, "detector": r.detector_name, "score": r.score, "triggered": r.triggered} for r in results]
+    
+    return jsonify({
+        "case_id": c.id,
+        "title": c.title,
+        "statements": stmts_data,
+        "results": res_data
+    })
 
 @cases_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -87,6 +117,26 @@ def get_case_detail(case_id):
         elif t.type == 'credit':
             total_credited += float(t.amount)
 
+    statements_data = []
+    for s in c.statements:
+        stmt_txns = [t for t in txns if t.statement_id == s.id]
+        s_debits = sum(float(t.amount) for t in stmt_txns if t.type == 'debit')
+        s_credits = sum(float(t.amount) for t in stmt_txns if t.type == 'credit')
+        statements_data.append({
+            "id": s.id, 
+            "filename": s.filename, 
+            "status": s.upload_status,
+            "suspicion_score": s.suspicion_score,
+            "severity": s.severity,
+            "risk_level": s.risk_level,
+            "ai_summary": s.ai_summary,
+            "account_holder": s.account_holder,
+            "account_number": s.account_number,
+            "bank_name": s.bank_name,
+            "total_debited": s_debits,
+            "total_credited": s_credits
+        })
+
     return jsonify({
         "id": c.id,
         "display_id": getattr(c, 'display_id', None),
@@ -105,18 +155,7 @@ def get_case_detail(case_id):
         "statement_period": statement_period,
         "total_debited": total_debited,
         "total_credited": total_credited,
-        "statements": [{
-            "id": s.id, 
-            "filename": s.filename, 
-            "status": s.upload_status,
-            "suspicion_score": s.suspicion_score,
-            "severity": s.severity,
-            "risk_level": s.risk_level,
-            "ai_summary": s.ai_summary,
-            "account_holder": s.account_holder,
-            "account_number": s.account_number,
-            "bank_name": s.bank_name
-        } for s in c.statements]
+        "statements": statements_data
     }), 200
 
 

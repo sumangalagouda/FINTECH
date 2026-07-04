@@ -125,7 +125,7 @@ def process_and_normalize(raw_transactions, statement_id, case_id):
             # DATE
             # --------------------
             if parsed.get("Date") is not None:
-                date_str = str(parsed["Date"])
+                date_str = str(parsed["Date"]).replace("\n", "").replace("\r", "")
 
             # --------------------
             # DESCRIPTION
