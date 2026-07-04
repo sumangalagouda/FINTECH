@@ -15,11 +15,19 @@ from networkx.readwrite import json_graph
 graph_bp = Blueprint('graph', __name__, url_prefix='/api')
 
 def get_graph_from_db(case_id):
+    # Always rebuild to ensure the latest graph builder logic is used
+    G = build_multi_statement_graph(case_id)
+    
+    # Update cache while we're at it
+    data = graph_to_json(G)
     cg = CaseGraph.query.filter_by(case_id=case_id).first()
     if cg:
-        return json_graph.node_link_graph(cg.graph_data)
-    # Build on fly if missing
-    G = build_multi_statement_graph(case_id)
+        cg.graph_data = data
+    else:
+        cg = CaseGraph(case_id=case_id, graph_data=data)
+        db.session.add(cg)
+    db.session.commit()
+    
     return G
 
 @graph_bp.route('/graph/build/<case_id>', methods=['POST'])
@@ -40,21 +48,29 @@ def build_graph_endpoint(case_id):
 
 @graph_bp.route('/graph/<case_id>', methods=['GET'])
 def get_graph(case_id):
+    G = build_multi_statement_graph(case_id)
+    data = graph_to_json(G)
+    
+    # Update cache
     cg = CaseGraph.query.filter_by(case_id=case_id).first()
     if cg:
-        return jsonify(cg.graph_data)
+        cg.graph_data = data
     else:
-        G = build_multi_statement_graph(case_id)
-        return jsonify(graph_to_json(G))
+        cg = CaseGraph(case_id=case_id, graph_data=data)
+        db.session.add(cg)
+    db.session.commit()
+    
+    return jsonify(data)
 
 @graph_bp.route('/graph/reconstruct-trail', methods=['POST'])
 def reconstruct_trail_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
+    account_id = data.get('account_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
     G = get_graph_from_db(case_id)
-    result = reconstruct_trail(G)
+    result = reconstruct_trail(G, case_id, account_id)
     return jsonify(result)
 
 @graph_bp.route('/graph/cross-analysis', methods=['POST'])
@@ -88,11 +104,7 @@ def detect_circular_flow_endpoint():
         return jsonify({"error": "case_id is required"}), 400
     G = get_graph_from_db(case_id)
     
-    from app.models.statement import Statement
-    primary_statement = Statement.query.filter_by(case_id=case_id, is_primary=True).first()
-    primary_account = primary_statement.account_number if primary_statement else None
-    
-    results = detect_circular_flow(G, primary_account=primary_account)
+    results = detect_circular_flow(G)
     return jsonify(results)
 
 @graph_bp.route('/detect/layering-chain', methods=['POST'])

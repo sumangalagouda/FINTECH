@@ -130,36 +130,100 @@ from app.models.transaction import Transaction
 def build_graph(transactions: list) -> nx.MultiDiGraph:
     """
     Build a transaction graph.
-
-    Uses MultiDiGraph so multiple transfers
-    between the same entities are preserved.
     """
-
     G = nx.MultiDiGraph()
-
     nodes = {}
+    
+    # We will track edge signatures to avoid duplicate reconciliation across statements
+    # signature: (u, v, date_str, amount_str)
+    seen_edges = set()
 
     for t in transactions:
-
         # --------------------------------------------------------------
-        # NORMALIZATION
+        # FILTER NON-TRANSFER EVENTS
         # --------------------------------------------------------------
+        desc = (t.description or "").upper()
+        if any(bad in desc for bad in ["OPENING BALANCE", "CLOSING BALANCE", "BALANCE B/F", "BALANCE C/F", "B/F", "C/F"]):
+            continue
+            
+        t_type = (t.type or "").lower()
+        if t_type not in ["credit", "cr", "debit", "dr"]:
+            continue
+            
+        # --------------------------------------------------------------
+        # RESOLVE STATEMENT ACCOUNT
+        # --------------------------------------------------------------
+        stmt_acc = None
+        if t.statement:
+            if t.statement.account_number and t.statement.account_number != "PRIMARY_ACCOUNT":
+                stmt_acc = t.statement.account_number
+            else:
+                # Use statement ID to avoid star graph merging "PRIMARY_ACCOUNT"
+                stmt_acc = f"STATEMENT_{t.statement.id}"
+                
+        if not stmt_acc:
+            continue
+            
+        # --------------------------------------------------------------
+        # RESOLVE COUNTERPARTY ACCOUNT
+        # --------------------------------------------------------------
+        c_party = None
+        invalid_accounts = {"PRIMARY_ACCOUNT", "UNKNOWN", "SELF", "OPENING BALANCE"}
+        
+        # Helper to extract valid account
+        def get_valid_acc(acc_str):
+            if not acc_str: return None
+            if str(acc_str).strip().upper() in invalid_accounts:
+                return None
+            return acc_str
 
-        u = t.sender_account or "SELF"
-        v = t.receiver_account or "UNKNOWN"
+        # Direction rules
+        if t_type in ["debit", "dr"]:
+            # Money leaving stmt_acc -> c_party
+            u = stmt_acc
+            
+            c_party = get_valid_acc(t.receiver_account)
+            if not c_party:
+                alt = get_valid_acc(t.sender_account)
+                if alt and alt != stmt_acc:
+                    c_party = alt
+            v = c_party
+        else:
+            # Money entering c_party -> stmt_acc
+            v = stmt_acc
+            
+            c_party = get_valid_acc(t.sender_account)
+            if not c_party:
+                alt = get_valid_acc(t.receiver_account)
+                if alt and alt != stmt_acc:
+                    c_party = alt
+            u = c_party
 
-        amount = abs(
-            float(t.amount or 0)
-        )
+        if not u or not v:
+            continue
+            
+        if u == v:
+            continue
 
+        amount = abs(float(t.amount or 0))
+        if amount <= 0:
+            continue
+            
         txn_date = t.date
+        date_str = txn_date.isoformat() if txn_date else None
+        
+        # --------------------------------------------------------------
+        # RECONCILIATION
+        # --------------------------------------------------------------
+        edge_signature = (u, v, date_str, round(amount, 2))
+        if edge_signature in seen_edges:
+            continue
+        seen_edges.add(edge_signature)
 
         # --------------------------------------------------------------
         # INITIALIZE NODES
         # --------------------------------------------------------------
-
         if u not in nodes:
-
             nodes[u] = {
                 "total_received": 0.0,
                 "total_sent": 0.0,
@@ -170,7 +234,6 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
             }
 
         if v not in nodes:
-
             nodes[v] = {
                 "total_received": 0.0,
                 "total_sent": 0.0,
@@ -181,82 +244,36 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
             }
 
         # --------------------------------------------------------------
-        # SENDER STATS
+        # UPDATE STATS
         # --------------------------------------------------------------
-
         nodes[u]["total_sent"] += amount
         nodes[u]["transaction_count"] += 1
-
-        if txn_date:
-
-            if (
-                nodes[u]["first_seen"] is None
-                or txn_date
-                < nodes[u]["first_seen"]
-            ):
-                nodes[u]["first_seen"] = txn_date
-
-            if (
-                nodes[u]["last_seen"] is None
-                or txn_date
-                > nodes[u]["last_seen"]
-            ):
-                nodes[u]["last_seen"] = txn_date
-
-        # --------------------------------------------------------------
-        # RECEIVER STATS
-        # --------------------------------------------------------------
-
         nodes[v]["total_received"] += amount
         nodes[v]["transaction_count"] += 1
 
         if txn_date:
-
-            if (
-                nodes[v]["first_seen"] is None
-                or txn_date
-                < nodes[v]["first_seen"]
-            ):
-                nodes[v]["first_seen"] = txn_date
-
-            if (
-                nodes[v]["last_seen"] is None
-                or txn_date
-                > nodes[v]["last_seen"]
-            ):
-                nodes[v]["last_seen"] = txn_date
+            for node_id in [u, v]:
+                if nodes[node_id]["first_seen"] is None or txn_date < nodes[node_id]["first_seen"]:
+                    nodes[node_id]["first_seen"] = txn_date
+                if nodes[node_id]["last_seen"] is None or txn_date > nodes[node_id]["last_seen"]:
+                    nodes[node_id]["last_seen"] = txn_date
 
         # --------------------------------------------------------------
         # EDGE ATTRIBUTES
         # --------------------------------------------------------------
-
         is_suspicious = amount >= 500000
 
         G.add_edge(
-
             u,
             v,
-
             txn_id=t.id,
-
             amount=amount,
             weight=amount,
-
-            date=(
-                txn_date.isoformat()
-                if txn_date
-                else None
-            ),
-
+            date=date_str,
             description=t.description,
-
-            type=getattr(
-                t,
-                "type",
-                None
-            ),
-
-            is_suspicious=is_suspicious
+            type=getattr(t, "type", None),
+            is_suspicious=is_suspicious,
+            statement_id=t.statement_id
         )
 
     # ========================================================================

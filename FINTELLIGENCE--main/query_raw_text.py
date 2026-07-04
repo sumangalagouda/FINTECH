@@ -1,0 +1,17 @@
+import psycopg2
+
+conn = psycopg2.connect("postgresql://neondb_owner:npg_YakjfGdS80sM@ep-plain-snow-aobqr0pz-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require")
+cur = conn.cursor()
+
+cur.execute("""
+    SELECT type, amount, sender_account, receiver_account, description, raw_text
+    FROM transactions 
+    WHERE case_id = 'c9408e25-19b9-4ef5-b750-7678c63f981d'
+    AND amount = 48500
+""")
+txns = cur.fetchall()
+
+for t in txns:
+    print(t)
+
+conn.close()

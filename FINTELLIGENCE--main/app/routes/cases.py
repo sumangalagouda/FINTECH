@@ -112,7 +112,10 @@ def get_case_detail(case_id):
             "suspicion_score": s.suspicion_score,
             "severity": s.severity,
             "risk_level": s.risk_level,
-            "ai_summary": s.ai_summary
+            "ai_summary": s.ai_summary,
+            "account_holder": s.account_holder,
+            "account_number": s.account_number,
+            "bank_name": s.bank_name
         } for s in c.statements]
     }), 200
 

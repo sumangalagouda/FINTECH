@@ -349,6 +349,19 @@ export default function Cases({
               <div className="case-title-block">
                 <span className="eyebrow">CASE - {String(caseDetail.display_id || '').padStart(8, '0')}</span>
                 <h1>{caseDetail.title || `Investigation: ${caseDetail.id.slice(0, 8)}`}</h1>
+                <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+                  <div className="case-stat-badge">Risk: <strong style={{ color: 'var(--danger)' }}>{Math.round(activeStatement?.suspicion_score ?? caseDetail.suspicion_score ?? 0)}/100</strong></div>
+                  <div className="case-stat-badge">Status: <strong>{caseDetail.status.toUpperCase()}</strong></div>
+                </div>
+                <div style={{ marginTop: '24px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5', fontWeight: 'bold', fontSize: '18px' }}>
+                    {(activeStatement?.account_holder || caseDetail.account_holder || '?').charAt(0)}
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0 }}>{activeStatement?.account_holder || caseDetail.account_holder}</h3>
+                    <div className="muted">{activeStatement?.account_number || caseDetail.account_number} • {activeStatement?.bank_name || caseDetail.bank_name}</div>
+                  </div>
+                </div>
                 <div className="case-statements-list" style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {caseDetail.statements?.map(stmt => (
                     <div 
@@ -596,15 +609,15 @@ export default function Cases({
             <div className="extracted-metadata-bar">
               <div className="meta-item">
                 <span className="meta-label">Account Holder</span>
-                <span className="meta-value">{caseDetail.account_holder || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.account_holder || caseDetail.account_holder || 'Unknown'}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Account Number</span>
-                <span className="meta-value">{caseDetail.account_number || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.account_number || caseDetail.account_number || 'Unknown'}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Bank & Branch</span>
-                <span className="meta-value">{caseDetail.bank_name || 'Unknown'}</span>
+                <span className="meta-value">{activeStatement?.bank_name || caseDetail.bank_name || 'Unknown'}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-label">Total Debits</span>
