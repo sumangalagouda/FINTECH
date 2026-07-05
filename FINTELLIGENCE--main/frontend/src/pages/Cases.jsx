@@ -334,6 +334,8 @@ export default function Cases({
         <CaseList
           cases={cases}
           title="All Cases"
+          api={api}
+          refreshCases={refreshCases}
           onSelect={(id) => {
             setSelectedCaseId(id);
             setViewMode('detail');
@@ -675,9 +677,9 @@ export default function Cases({
             <div className="panel ai-summary-panel">
               <h3 className="panel-title">AI INVESTIGATION SUMMARY</h3>
               <div className="ai-summary-content">
-                {activeStatement?.ai_summary ? (
+                {caseDetail?.ai_summary ? (
                   <div className="markdown-body" style={{ fontSize: '13px', lineHeight: '1.5' }}>
-                    <ReactMarkdown>{activeStatement.ai_summary}</ReactMarkdown>
+                    <ReactMarkdown>{caseDetail.ai_summary}</ReactMarkdown>
                   </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '20px' }}>

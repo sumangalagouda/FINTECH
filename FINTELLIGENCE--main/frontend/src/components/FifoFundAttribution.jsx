@@ -59,20 +59,36 @@ function BranchNode({ node }) {
   );
 }
 
-export default function FifoFundAttribution({ api, caseId, selectedAccountId, uniqueAccounts, onAccountSelect }) {
+export default function FifoFundAttribution({ api, caseId, selectedTxnId, setSelectedTxnId }) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [creditTxns, setCreditTxns] = useState([]);
+
+  // Fetch credit transactions list when component mounts or caseId changes
+  useEffect(() => {
+    if (!api || !caseId) return;
+    api(`/graph/credit-transactions/${caseId}`)
+      .then(res => {
+        if (Array.isArray(res)) {
+          setCreditTxns(res);
+          // If a credit exists and none is selected, select the first one automatically
+          if (res.length > 0 && !selectedTxnId) {
+             setSelectedTxnId(res[0].id);
+          }
+        }
+      })
+      .catch(console.error);
+  }, [api, caseId]);
 
   useEffect(() => {
-    if (!api || !caseId || !selectedAccountId) return;
+    if (!api || !caseId) return;
     
     let alive = true;
     setIsLoading(true);
     
-    // Call our new trail reconstruction endpoint
     api('/graph/reconstruct-trail', {
       method: 'POST',
-      body: JSON.stringify({ account_id: selectedAccountId, case_id: caseId })
+      body: JSON.stringify({ txn_id: selectedTxnId || null, case_id: caseId })
     }).then(res => {
       if (alive) {
         setData(res || null);
@@ -85,7 +101,13 @@ export default function FifoFundAttribution({ api, caseId, selectedAccountId, un
     });
 
     return () => { alive = false; };
-  }, [api, caseId, selectedAccountId]);
+  }, [api, caseId, selectedTxnId]);
+
+  const formatDate = (dstr) => {
+    if (!dstr) return '';
+    const d = new Date(dstr);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
   return (
     <div className="panel" style={{ padding: '24px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '24px' }}>
@@ -98,16 +120,21 @@ export default function FifoFundAttribution({ api, caseId, selectedAccountId, un
           </p>
         </div>
         
-        {/* Account Selector */}
-        <select 
-          value={selectedAccountId || ''}
-          onChange={(e) => onAccountSelect(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#f8fafc', color: '#0f172a', fontWeight: '500', minWidth: '200px' }}
-        >
-          {uniqueAccounts.map(acc => (
-            <option key={acc} value={acc}>{acc}</option>
-          ))}
-        </select>
+        {/* Transaction Selector */}
+        {creditTxns.length > 0 && (
+          <select 
+            value={selectedTxnId || ''}
+            onChange={(e) => setSelectedTxnId(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#f8fafc', color: '#0f172a', fontWeight: '500', minWidth: '300px' }}
+          >
+            <option value="">-- Select Exact Seed Credit --</option>
+            {creditTxns.map(txn => (
+              <option key={txn.id} value={txn.id}>
+                {formatDate(txn.date)} - {txn.sender_account} ({formatMoney(txn.amount)})
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {isLoading ? (
@@ -134,7 +161,7 @@ export default function FifoFundAttribution({ api, caseId, selectedAccountId, un
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginTop: '4px' }}>
                 <span style={{ fontSize: '28px', fontWeight: 'bold', color: '#0f172a' }}>{formatMoney(data.suspicious_inflow_amount)}</span>
-                <span style={{ fontSize: '15px', color: '#64748b', fontWeight: '500' }}>into {data.seed_account}</span>
+                <span style={{ fontSize: '15px', color: '#64748b', fontWeight: '500' }}>from {data.seed_account}</span>
               </div>
               <div style={{ fontSize: '13px', color: '#64748b', marginTop: '8px', display: 'flex', gap: '16px' }}>
                 <span>{formatMoney(data.attributed_outflow_amount)} traced downstream</span>

@@ -66,11 +66,38 @@ def get_graph(case_id):
 def reconstruct_trail_endpoint():
     data = request.get_json(silent=True) or {}
     case_id = data.get('case_id')
-    account_id = data.get('account_id')
+    txn_id = data.get('txn_id')
     if not case_id:
         return jsonify({"error": "case_id is required"}), 400
     G = get_graph_from_db(case_id)
-    result = reconstruct_trail(G, case_id, account_id)
+    result = reconstruct_trail(G, case_id, txn_id)
+    return jsonify(result)
+
+@graph_bp.route('/graph/credit-transactions/<case_id>', methods=['GET'])
+def get_credit_transactions(case_id):
+    from app.models.transaction import Transaction
+    txns = Transaction.query.filter_by(case_id=case_id).all()
+    credits = [t for t in txns if t.type.lower() in ['credit', 'cr']]
+    credits.sort(key=lambda x: x.date)
+    
+    result = []
+    for t in credits:
+        # Determine statement account if receiver is missing/generic
+        stmt_acc = t.receiver_account
+        if not stmt_acc or stmt_acc == "PRIMARY_ACCOUNT":
+            if t.statement and t.statement.account_number:
+                stmt_acc = t.statement.account_number
+            elif t.statement:
+                stmt_acc = f"STATEMENT_{t.statement.id}"
+                
+        result.append({
+            "id": t.id,
+            "date": t.date.isoformat(),
+            "amount": t.amount,
+            "sender_account": t.sender_account or "Unknown Source",
+            "receiver_account": stmt_acc or "Primary Account"
+        })
+        
     return jsonify(result)
 
 @graph_bp.route('/graph/cross-analysis', methods=['POST'])

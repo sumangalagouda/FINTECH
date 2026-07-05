@@ -15,6 +15,7 @@ const formatMoney = (value) => new Intl.NumberFormat('en-IN', { maximumFractionD
 export default function MoneyTrail({ api, graph, transactions, selectedCase, caseDetail, cases, selectedCaseId, setSelectedCaseId }) {
   const [pageViewMode, setPageViewMode] = useState('list');
   const [fifoAccountId, setFifoAccountId] = useState(null);
+  const [selectedTxnId, setSelectedTxnId] = useState(null);
 
   const uniqueAccounts = useMemo(() => {
     const accounts = new Set();
@@ -136,6 +137,7 @@ export default function MoneyTrail({ api, graph, transactions, selectedCase, cas
           graph={graph}
           transactions={transactions}
           selectedCaseId={selectedCaseId}
+          selectedTxnId={selectedTxnId}
           onNodeClick={(nodeId) => setFifoAccountId(nodeId)}
         />
         
@@ -144,9 +146,8 @@ export default function MoneyTrail({ api, graph, transactions, selectedCase, cas
           <FifoFundAttribution
             api={api}
             caseId={selectedCaseId}
-            uniqueAccounts={uniqueAccounts}
-            selectedAccountId={fifoAccountId}
-            onAccountSelect={setFifoAccountId}
+            selectedTxnId={selectedTxnId}
+            setSelectedTxnId={setSelectedTxnId}
           />
         )}
       </section>

@@ -1,4 +1,5 @@
-import { FolderOpen, ChevronRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { FolderOpen, ChevronRight, CheckCircle2, Clock, AlertCircle, Pencil, X, Check } from 'lucide-react';
 import Badge from '../shared/Badge';
 
 function getStatusDetails(status = '') {
@@ -9,7 +10,41 @@ function getStatusDetails(status = '') {
   return { color: '#3b82f6', bg: '#eff6ff', icon: AlertCircle, label: status.replace(/_/g, ' ').toUpperCase() };
 }
 
-export default function CaseList({ cases = [], onSelect, title }) {
+export default function CaseList({ cases = [], onSelect, title, api, refreshCases }) {
+  const [editingCaseId, setEditingCaseId] = useState(null);
+  const [editCaseName, setEditCaseName] = useState('');
+  
+  const startEditing = (e, caseId, currentTitle) => {
+    e.stopPropagation();
+    setEditingCaseId(caseId);
+    setEditCaseName(currentTitle || '');
+  };
+
+  const handleRename = async (e, caseId) => {
+    e.stopPropagation();
+    if (!editCaseName.trim()) {
+      setEditingCaseId(null);
+      return;
+    }
+    try {
+      await api(`/cases/${caseId}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editCaseName.trim() }),
+      });
+      if (refreshCases) await refreshCases();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to rename case');
+    }
+    setEditingCaseId(null);
+  };
+  
+  const cancelEditing = (e) => {
+    e.stopPropagation();
+    setEditingCaseId(null);
+  };
+
   return (
     <section className="stack" style={{ padding: '24px', background: '#f8fafc', minHeight: '100%' }}>
       <style>{`
@@ -92,13 +127,38 @@ export default function CaseList({ cases = [], onSelect, title }) {
                 {c.severity && <Badge value={c.severity} />}
               </div>
               
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
-                  {c.display_id ? `Case ${String(c.display_id).padStart(3, '0')}` : `Case ${c.id.slice(0, 8)}`}
+              <div style={{ position: 'relative' }}>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 'bold', color: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{c.display_id ? `Case ${String(c.display_id).padStart(3, '0')}` : `Case ${c.id.slice(0, 8)}`}</span>
+                  {editingCaseId !== c.id && (
+                    <button 
+                      onClick={(e) => startEditing(e, c.id, c.title)}
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '4px', borderRadius: '4px' }}
+                      onMouseOver={(e) => { e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.background = '#eff6ff'; }}
+                      onMouseOut={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
                 </h3>
-                <p style={{ margin: 0, fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {c.title || 'Ongoing Investigation'}
-                </p>
+                {editingCaseId === c.id ? (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <input 
+                      type="text" 
+                      value={editCaseName} 
+                      onChange={(e) => setEditCaseName(e.target.value)} 
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(e, c.id); else if (e.key === 'Escape') cancelEditing(e); }}
+                      autoFocus
+                      style={{ flex: 1, padding: '4px 8px', fontSize: '13px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}
+                    />
+                    <button onClick={(e) => handleRename(e, c.id)} style={{ padding: '4px', background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><Check size={14} /></button>
+                    <button onClick={cancelEditing} style={{ padding: '4px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}><X size={14} /></button>
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, fontSize: '13px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {c.title || 'Ongoing Investigation'}
+                  </p>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>

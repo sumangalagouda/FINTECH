@@ -123,7 +123,7 @@ def detect_circular_flow(graph: nx.MultiDiGraph):
     cycles = [
         cycle
         for cycle in nx.simple_cycles(graph)
-        if 2 <= len(cycle) <= MAX_CYCLE_LENGTH
+        if 3 <= len(cycle) <= MAX_CYCLE_LENGTH
     ]
 
     if not cycles:

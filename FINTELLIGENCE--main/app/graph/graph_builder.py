@@ -154,13 +154,14 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
         # RESOLVE STATEMENT ACCOUNT
         # --------------------------------------------------------------
         stmt_acc = None
-        if t.statement:
-            if t.statement.account_number and t.statement.account_number != "PRIMARY_ACCOUNT":
-                stmt_acc = t.statement.account_number
-            else:
-                # Use statement ID to avoid star graph merging "PRIMARY_ACCOUNT"
-                stmt_acc = f"STATEMENT_{t.statement.id}"
-                
+        if t.statement and t.statement.account_number and t.statement.account_number != "PRIMARY_ACCOUNT":
+            stmt_acc = t.statement.account_number
+        else:
+            # Fallback if statement account number is missing. 
+            # We must use something unique per statement if account is completely unknown, 
+            # but usually parsers should extract it.
+            stmt_acc = f"STATEMENT_{t.statement.id}" if t.statement else "UNKNOWN_STATEMENT"
+            
         if not stmt_acc:
             continue
             
@@ -230,8 +231,11 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
                 "transaction_count": 0,
                 "first_seen": txn_date,
                 "last_seen": txn_date,
-                "risk_score": 0.0
+                "risk_score": 0.0,
+                "is_statement_account": (u == stmt_acc)
             }
+        elif u == stmt_acc:
+            nodes[u]["is_statement_account"] = True
 
         if v not in nodes:
             nodes[v] = {
@@ -240,8 +244,11 @@ def build_graph(transactions: list) -> nx.MultiDiGraph:
                 "transaction_count": 0,
                 "first_seen": txn_date,
                 "last_seen": txn_date,
-                "risk_score": 0.0
+                "risk_score": 0.0,
+                "is_statement_account": (v == stmt_acc)
             }
+        elif v == stmt_acc:
+            nodes[v]["is_statement_account"] = True
 
         # --------------------------------------------------------------
         # UPDATE STATS

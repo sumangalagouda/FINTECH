@@ -11,6 +11,7 @@ export default function Upload({ api, cases, refreshCases, selectedCaseId, setSe
   // Two strict modes: 'new' or 'existing'
   const [mode, setMode] = useState('new');
   const [targetCaseId, setTargetCaseId] = useState(selectedCaseId || '');
+  const [caseName, setCaseName] = useState('');
 
   const handleFileSelect = (event) => {
     const selectedFiles = Array.from(event.target.files);
@@ -38,6 +39,8 @@ export default function Upload({ api, cases, refreshCases, selectedCaseId, setSe
       
       if (mode === 'existing') {
         form.append('case_id', targetCaseId);
+      } else if (mode === 'new' && caseName.trim()) {
+        form.append('case_title', caseName.trim());
       }
       
       const result = await api('/upload/', { method: 'POST', body: form });
@@ -64,18 +67,33 @@ export default function Upload({ api, cases, refreshCases, selectedCaseId, setSe
     <section className="upload-view" style={{ maxWidth: '800px', margin: '0 auto', paddingTop: '40px' }}>
       
       <div style={{ display: 'flex', gap: '20px', marginBottom: '32px' }}>
-        <button 
-          onClick={() => setMode('new')}
-          style={{
-            flex: 1, padding: '24px', borderRadius: '12px', border: mode === 'new' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-            background: mode === 'new' ? '#eff6ff' : 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', gap: '12px'
-          }}
-        >
-          <FolderPlus size={32} color={mode === 'new' ? '#3b82f6' : '#64748b'} />
-          <strong style={{ color: mode === 'new' ? '#1e3a8a' : '#334155', fontSize: '16px' }}>Create New Case</strong>
-          <span style={{ color: '#64748b', fontSize: '13px' }}>Upload statements to start a new investigation</span>
-        </button>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <button 
+            onClick={() => setMode('new')}
+            style={{
+              padding: '24px', borderRadius: '12px', border: mode === 'new' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+              background: mode === 'new' ? '#eff6ff' : 'white', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '12px'
+            }}
+          >
+            <FolderPlus size={32} color={mode === 'new' ? '#3b82f6' : '#64748b'} />
+            <strong style={{ color: mode === 'new' ? '#1e3a8a' : '#334155', fontSize: '16px' }}>Create New Case</strong>
+            <span style={{ color: '#64748b', fontSize: '13px' }}>Upload statements to start a new investigation</span>
+          </button>
+          
+          {mode === 'new' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Case Name (Optional)</label>
+              <input 
+                type="text" 
+                value={caseName} 
+                onChange={(e) => setCaseName(e.target.value)}
+                placeholder="e.g. Fraud Investigation Q3"
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none' }}
+              />
+            </div>
+          )}
+        </div>
         
         <button 
           onClick={() => setMode('existing')}

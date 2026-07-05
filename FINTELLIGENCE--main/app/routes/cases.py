@@ -359,6 +359,35 @@ def update_case_status(case_id):
     
     return jsonify({"msg": "Status updated"}), 200
 
+@cases_bp.route('/<case_id>/rename', methods=['PATCH'])
+@jwt_required()
+@limiter.limit("20 per minute")
+def rename_case(case_id):
+    current_user_id = get_jwt_identity()
+    c = Case.query.get_or_404(case_id)
+    
+    data = request.get_json() if request.is_json else request.form
+    new_title = data.get('title')
+    
+    if not new_title or not str(new_title).strip():
+        return jsonify({"error": "Title is required"}), 400
+        
+    old_title = c.title
+    c.title = str(new_title).strip()
+    
+    audit = AuditTrail(
+        case_id=c.id,
+        action="CASE_RENAME",
+        performed_by=current_user_id,
+        old_value={"title": old_title},
+        new_value={"title": c.title},
+        ip_address=request.remote_addr
+    )
+    db.session.add(audit)
+    db.session.commit()
+    
+    return jsonify({"msg": "Case renamed successfully", "title": c.title}), 200
+
 @cases_bp.route('/<case_id>/statements/<statement_id>/set-primary', methods=['POST'])
 @jwt_required()
 @limiter.limit("10 per minute")

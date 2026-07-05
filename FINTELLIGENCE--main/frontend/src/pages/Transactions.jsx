@@ -6,9 +6,18 @@ import CaseList from '../components/CaseList';
 
 const formatAmount = (value) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Number(value || 0));
 
+const getTransactionChannel = (txn) => {
+  const desc = String(txn.description || '').toLowerCase();
+  if (desc.includes('atm') || desc.includes('cdm') || desc.includes('cash withdrawal') || desc.includes('cash withdraw') || desc.includes('atm withdrawal')) return 'atm';
+  if (desc.includes('credit card') || desc.includes('card payment') || desc.includes('card')) return 'cc';
+  if (desc.includes('upi') || desc.includes('imps') || desc.includes('neft') || desc.includes('rtgs')) return 'upi';
+  return 'other';
+};
+
 export default function Transactions({ transactions, selectedCase, api, cases, selectedCaseId, setSelectedCaseId }) {
   const [query, setQuery] = useState('');
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [filterType, setFilterType] = useState('all');
   const [viewMode, setViewMode] = useState('transactions'); // 'transactions' | 'beneficiaries'
   const [pageViewMode, setPageViewMode] = useState('list'); // 'list' | 'detail'
   const [beneficiaries, setBeneficiaries] = useState([]);
@@ -22,8 +31,35 @@ export default function Transactions({ transactions, selectedCase, api, cases, s
 
   const filtered = useMemo(() => transactions.filter((txn) => {
     const text = `${txn.date || ''} ${txn.description || ''} ${txn.sender_account || ''} ${txn.receiver_account || ''} ${txn.amount || ''}`.toLowerCase();
-    return text.includes(query.toLowerCase()) && (!flaggedOnly || txn.is_flagged || txn.risk_level !== 'low');
-  }), [flaggedOnly, query, transactions]);
+
+    if (!text.includes(query.toLowerCase())) {
+      return false;
+    }
+
+    if (flaggedOnly && !(txn.is_flagged || String(txn.risk_level || '').toLowerCase() !== 'low')) {
+      return false;
+    }
+
+    if (filterType !== 'all') {
+      const txnType = String(txn.type || '').toLowerCase();
+
+      if (filterType === 'debit' && txnType !== 'debit' && txnType !== 'dr') {
+        return false;
+      }
+
+      if (filterType === 'credit' && txnType !== 'credit' && txnType !== 'cr') {
+        return false;
+      }
+
+      if (['atm', 'cc', 'nft', 'upi', 'other'].includes(filterType)) {
+        if (getTransactionChannel(txn) !== filterType) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }), [flaggedOnly, query, transactions, filterType]);
 
   const columns = useMemo(() => ([
     { accessorKey: 'date', header: 'Date', cell: ({ getValue }) => (getValue() ? <span style={{ color: '#64748b', fontSize: '13px' }}>{String(getValue()).slice(0, 10)}</span> : '-') },
@@ -152,6 +188,18 @@ export default function Transactions({ transactions, selectedCase, api, cases, s
         <label className="search-box">
           <Search size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          Filter:
+          <select value={filterType} onChange={(event) => setFilterType(event.target.value)} style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: '13px' }}>
+            <option value="all">All</option>
+            <option value="debit">Debit</option>
+            <option value="credit">Credit</option>
+            <option value="atm">ATM</option>
+            <option value="cc">CC/Card</option>
+            <option value="upi">UPI/IMPS/NEFT</option>
+            <option value="other">Other</option>
+          </select>
         </label>
         <label className="check-label">
           <input checked={flaggedOnly} onChange={(event) => setFlaggedOnly(event.target.checked)} type="checkbox" />

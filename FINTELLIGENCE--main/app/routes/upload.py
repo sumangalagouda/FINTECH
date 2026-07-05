@@ -36,12 +36,18 @@ def upload_file():
         return jsonify({"error": "No selected files"}), 400
         
     case_id = request.form.get('case_id')
+    custom_title = request.form.get('case_title')
     display_id = None
     if not case_id:
-        # Use first filename for title
-        title_filename = files[0].filename if files[0].filename else "Multiple Files"
+        if custom_title and custom_title.strip():
+            title = custom_title.strip()
+        else:
+            # Use first filename for title
+            title_filename = files[0].filename if files[0].filename else "Multiple Files"
+            title = f"Investigation: {title_filename}"
+            
         new_case = Case(
-            title=f"Investigation: {title_filename}",
+            title=title,
             created_by=current_user,
             assigned_to=current_user
         )
